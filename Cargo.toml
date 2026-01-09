@@ -1,0 +1,41 @@
+[package]
+name = "nyacore-autosplitter"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Memory-based autosplitter for FromSoftware games"
+repository = "https://github.com/valkyaha/HitCounter"
+
+[features]
+default = []
+vision = ["dep:image", "dep:imageproc"]
+
+[dependencies]
+# Core
+log.workspace = true
+thiserror.workspace = true
+serde = { workspace = true }
+serde_json.workspace = true
+
+# Async/threading
+parking_lot = "0.12"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_ProcessStatus",
+] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
+# Vision feature (optional)
+image = { version = "0.25", optional = true }
+imageproc = { version = "0.25", optional = true }
+
+[dev-dependencies]
+env_logger.workspace = true
