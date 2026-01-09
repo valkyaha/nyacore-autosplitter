@@ -75,6 +75,9 @@ pub enum AutosplitterError {
     #[error("Invalid configuration: {0}")]
     InvalidConfig(String),
 
+    #[error("Configuration error: {0}")]
+    ConfigError(String),
+
     #[error("Platform not supported: {0}")]
     PlatformNotSupported(String),
 }

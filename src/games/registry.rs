@@ -1,7 +1,9 @@
 //! Game registry for discovering and creating games
 
 use std::collections::HashMap;
+use std::path::Path;
 use super::BoxedGame;
+use super::configurable::ConfigurableGameFactory;
 
 /// Factory for creating game instances
 pub trait GameFactory: Send + Sync {
@@ -65,6 +67,56 @@ impl GameRegistry {
         self.register(Box::new(ArmoredCore6Factory));
 
         log::info!("Registered {} built-in games", self.factories.len());
+    }
+
+    /// Register games from a plugins directory (NYA-Core-Assets/plugins)
+    ///
+    /// Each subdirectory should contain plugin.toml and autosplitter.toml
+    pub fn register_from_plugins_dir(&mut self, plugins_dir: &Path) {
+        if !plugins_dir.exists() {
+            log::warn!("Plugins directory does not exist: {:?}", plugins_dir);
+            return;
+        }
+
+        log::info!("Loading games from plugins directory: {:?}", plugins_dir);
+
+        let entries = match std::fs::read_dir(plugins_dir) {
+            Ok(e) => e,
+            Err(e) => {
+                log::error!("Failed to read plugins directory: {}", e);
+                return;
+            }
+        };
+
+        let mut loaded = 0;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+
+            let plugin_toml = path.join("plugin.toml");
+            let autosplitter_toml = path.join("autosplitter.toml");
+
+            if !plugin_toml.exists() || !autosplitter_toml.exists() {
+                log::debug!("Skipping {:?}: missing config files", path);
+                continue;
+            }
+
+            match ConfigurableGameFactory::from_dir(&path) {
+                Ok(factory) => {
+                    let game_id = factory.game_id().to_string();
+                    log::info!("Loaded configurable game: {}", game_id);
+                    self.register(Box::new(factory));
+                    loaded += 1;
+                }
+                Err(e) => {
+                    log::error!("Failed to load game from {:?}: {}", path, e);
+                }
+            }
+        }
+
+        log::info!("Loaded {} games from plugins directory", loaded);
     }
 
     /// Check if a game is registered

@@ -15,8 +15,10 @@
 
 mod common;
 mod registry;
+pub mod config;
+pub mod configurable;
 
-// Game implementations
+// Game implementations (fallback for when configs aren't available)
 pub mod dark_souls_1;
 pub mod dark_souls_2;
 pub mod dark_souls_3;
