@@ -40,6 +40,10 @@ pub use crate::games::{
     Game, GameFactory, GameRegistry,
     CustomTriggerType, CustomTriggerParam, CustomTriggerParamType, CustomTriggerChoice,
     TriggerTypeInfo, AttributeInfo,
+    // Game data loading
+    config::{GameData, BossDefinition, PresetDefinition, BossesConfig, PresetsConfig},
+    registry::{load_all_game_data, load_game_data, get_presets_for_game,
+               get_bosses_for_preset, get_boss_flags_for_preset, get_boss_kill_offsets_for_preset},
 };
 pub use crate::memory::{MemoryReader, ProcessContext};
 pub use crate::readers::FlagReader;

@@ -14,7 +14,7 @@
 //! 4. Register in `registry.rs` `register_builtin()`
 
 mod common;
-mod registry;
+pub mod registry;
 pub mod config;
 pub mod configurable;
 

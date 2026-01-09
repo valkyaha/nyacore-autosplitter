@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use super::BoxedGame;
 use super::configurable::ConfigurableGameFactory;
+use super::config::{GameData, BossDefinition, PresetDefinition};
 
 /// Factory for creating game instances
 pub trait GameFactory: Send + Sync {
@@ -154,6 +155,90 @@ impl Default for GameRegistry {
     fn default() -> Self {
         Self::new()
     }
+}
+
+// =============================================================================
+// GAME DATA LOADING (STANDALONE FUNCTIONS)
+// =============================================================================
+
+/// Load all game data from a plugins directory
+/// Returns a map of game_id -> GameData
+pub fn load_all_game_data(plugins_dir: &Path) -> HashMap<String, GameData> {
+    let mut games = HashMap::new();
+
+    if !plugins_dir.exists() {
+        log::warn!("Plugins directory does not exist: {:?}", plugins_dir);
+        return games;
+    }
+
+    let entries = match std::fs::read_dir(plugins_dir) {
+        Ok(e) => e,
+        Err(e) => {
+            log::error!("Failed to read plugins directory: {}", e);
+            return games;
+        }
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+
+        match GameData::load_from_dir(&path) {
+            Ok(data) => {
+                let game_id = data.plugin.plugin.id.clone();
+                log::debug!("Loaded game data for: {}", game_id);
+                games.insert(game_id, data);
+            }
+            Err(e) => {
+                log::debug!("Skipping {:?}: {}", path, e);
+            }
+        }
+    }
+
+    log::info!("Loaded game data for {} games", games.len());
+    games
+}
+
+/// Load game data for a specific game ID
+pub fn load_game_data(plugins_dir: &Path, game_id: &str) -> Option<GameData> {
+    let game_dir = plugins_dir.join(game_id);
+    if !game_dir.exists() {
+        return None;
+    }
+
+    GameData::load_from_dir(&game_dir).ok()
+}
+
+/// Get all available presets for a game
+pub fn get_presets_for_game(game_data: &GameData) -> Vec<&PresetDefinition> {
+    game_data.presets.presets.iter().collect()
+}
+
+/// Get all bosses for a specific preset
+pub fn get_bosses_for_preset<'a>(game_data: &'a GameData, preset_id: &str) -> Vec<&'a BossDefinition> {
+    game_data.get_bosses_for_preset(preset_id)
+}
+
+/// Get boss flag IDs for a preset (for autosplitter)
+pub fn get_boss_flags_for_preset(game_data: &GameData, preset_id: &str) -> Vec<(String, u32)> {
+    game_data.get_bosses_for_preset(preset_id)
+        .into_iter()
+        .filter_map(|boss| {
+            boss.flag_id.map(|flag| (boss.id.clone(), flag))
+        })
+        .collect()
+}
+
+/// Get boss kill offsets for a preset (for DS2-style games)
+pub fn get_boss_kill_offsets_for_preset(game_data: &GameData, preset_id: &str) -> Vec<(String, u32)> {
+    game_data.get_bosses_for_preset(preset_id)
+        .into_iter()
+        .filter_map(|boss| {
+            boss.kill_offset.map(|offset| (boss.id.clone(), offset))
+        })
+        .collect()
 }
 
 #[cfg(test)]

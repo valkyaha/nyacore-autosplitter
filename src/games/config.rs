@@ -242,6 +242,147 @@ pub struct PositionOffsets {
 }
 
 // =============================================================================
+// BOSSES AND PRESETS
+// =============================================================================
+
+/// Bosses configuration file (bosses.toml)
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct BossesConfig {
+    #[serde(default)]
+    pub bosses: Vec<BossDefinition>,
+}
+
+/// A boss definition
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct BossDefinition {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub location: Option<String>,
+    #[serde(default)]
+    pub required: bool,
+    #[serde(default)]
+    pub is_dlc: bool,
+    #[serde(default)]
+    pub dlc_name: Option<String>,
+    /// Event flag ID for standard flag-based detection
+    #[serde(default)]
+    pub flag_id: Option<u32>,
+    /// Kill counter offset for DS2-style detection
+    #[serde(default)]
+    pub kill_offset: Option<u32>,
+    #[serde(default)]
+    pub order: Option<i32>,
+    #[serde(default)]
+    pub aliases: Vec<String>,
+}
+
+/// Presets configuration file (presets.toml)
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct PresetsConfig {
+    #[serde(default)]
+    pub presets: Vec<PresetDefinition>,
+}
+
+/// A preset definition
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PresetDefinition {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub boss_ids: Vec<String>,
+}
+
+impl BossesConfig {
+    /// Load bosses configuration from a TOML file
+    pub fn load(path: &Path) -> Result<Self, ConfigError> {
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| ConfigError::IoError(e.to_string()))?;
+        toml::from_str(&content)
+            .map_err(|e| ConfigError::ParseError(e.to_string()))
+    }
+}
+
+impl PresetsConfig {
+    /// Load presets configuration from a TOML file
+    pub fn load(path: &Path) -> Result<Self, ConfigError> {
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| ConfigError::IoError(e.to_string()))?;
+        toml::from_str(&content)
+            .map_err(|e| ConfigError::ParseError(e.to_string()))
+    }
+}
+
+// =============================================================================
+// FULL GAME DATA
+// =============================================================================
+
+/// Complete game data loaded from a plugin directory
+#[derive(Debug, Clone)]
+pub struct GameData {
+    pub plugin: PluginConfig,
+    pub autosplitter: AutosplitterConfig,
+    pub bosses: BossesConfig,
+    pub presets: PresetsConfig,
+}
+
+impl GameData {
+    /// Load all game data from a plugin directory
+    pub fn load_from_dir(plugin_dir: &Path) -> Result<Self, ConfigError> {
+        let plugin_path = plugin_dir.join("plugin.toml");
+        let autosplitter_path = plugin_dir.join("autosplitter.toml");
+        let bosses_path = plugin_dir.join("bosses.toml");
+        let presets_path = plugin_dir.join("presets.toml");
+
+        let plugin = PluginConfig::load(&plugin_path)?;
+        let autosplitter = AutosplitterConfig::load(&autosplitter_path)?;
+
+        // Bosses and presets are optional
+        let bosses = if bosses_path.exists() {
+            BossesConfig::load(&bosses_path)?
+        } else {
+            BossesConfig::default()
+        };
+
+        let presets = if presets_path.exists() {
+            PresetsConfig::load(&presets_path)?
+        } else {
+            PresetsConfig::default()
+        };
+
+        Ok(Self {
+            plugin,
+            autosplitter,
+            bosses,
+            presets,
+        })
+    }
+
+    /// Get boss by ID
+    pub fn get_boss(&self, boss_id: &str) -> Option<&BossDefinition> {
+        self.bosses.bosses.iter().find(|b| b.id == boss_id)
+    }
+
+    /// Get preset by ID
+    pub fn get_preset(&self, preset_id: &str) -> Option<&PresetDefinition> {
+        self.presets.presets.iter().find(|p| p.id == preset_id)
+    }
+
+    /// Get all bosses for a preset
+    pub fn get_bosses_for_preset(&self, preset_id: &str) -> Vec<&BossDefinition> {
+        if let Some(preset) = self.get_preset(preset_id) {
+            preset.boss_ids.iter()
+                .filter_map(|id| self.get_boss(id))
+                .collect()
+        } else {
+            vec![]
+        }
+    }
+}
+
+// =============================================================================
 // CUSTOM TRIGGERS
 // =============================================================================
 
