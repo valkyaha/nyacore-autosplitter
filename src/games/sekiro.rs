@@ -4,20 +4,37 @@
 //! https://github.com/FrankvdStam/SoulSplitter
 //!
 //! Very similar to Dark Souls 3 with different offsets (0x18 instead of 0x10, 0xb0 instead of 0x70)
+//! Uses Category Decomposition algorithm for event flag reading.
 
 use std::sync::Arc;
 
-use super::{Game, Position3D, TriggerTypeInfo, AttributeInfo};
+use super::{
+    Game, GameFactory, BoxedGame, Position3D, TriggerTypeInfo, AttributeInfo,
+    common::{standard_event_flag_trigger, standard_position_trigger},
+};
 use crate::memory::{ProcessContext, MemoryReader, Pointer, parse_pattern, extract_relative_address};
 use crate::AutosplitterError;
 
-// Sekiro patterns from SoulSplitter
+// =============================================================================
+// CONSTANTS
+// =============================================================================
+
+/// Game metadata
+pub const GAME_ID: &str = "sekiro";
+pub const GAME_NAME: &str = "Sekiro: Shadows Die Twice";
+pub const PROCESS_NAMES: &[&str] = &["sekiro.exe"];
+
+/// Memory patterns from SoulSplitter
 pub const EVENT_FLAG_MAN_PATTERN: &str = "48 8b 0d ?? ?? ?? ?? 48 89 5c 24 50 48 89 6c 24 58 48 89 74 24 60";
 pub const FIELD_AREA_PATTERN: &str = "48 8b 0d ?? ?? ?? ?? 48 85 c9 74 26 44 8b 41 28 48 8d 54 24 40";
 pub const WORLD_CHR_MAN_PATTERN: &str = "48 8B 35 ?? ?? ?? ?? 44 0F 28 18";
 pub const IGT_PATTERN: &str = "48 8b 05 ?? ?? ?? ?? 32 d2 48 8b 48";
 pub const FADE_MAN_IMP_PATTERN: &str = "48 89 35 ?? ?? ?? ?? 48 8b c7 48 8b";
 pub const PLAYER_GAME_DATA_PATTERN: &str = "48 8b 0d ?? ?? ?? ?? 48 8b 41 20 c6";
+
+// =============================================================================
+// ATTRIBUTES
+// =============================================================================
 
 /// Character attributes for Sekiro
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,12 +44,17 @@ pub enum Attribute {
     AttackPower = 0x48,
 }
 
+// =============================================================================
+// GAME IMPLEMENTATION
+// =============================================================================
+
 /// Sekiro game implementation
 pub struct Sekiro {
+    // Core state
     reader: Option<Arc<dyn MemoryReader>>,
     initialized: bool,
 
-    // Core pointers
+    // Memory pointers
     event_flag_man: Pointer,
     field_area: Pointer,
     world_chr_man: Pointer,
@@ -61,6 +83,7 @@ impl Sekiro {
         }
     }
 
+    /// Get the memory reader if available
     fn reader(&self) -> Option<&dyn MemoryReader> {
         self.reader.as_ref().map(|r| r.as_ref())
     }
@@ -72,17 +95,21 @@ impl Default for Sekiro {
     }
 }
 
+// =============================================================================
+// GAME TRAIT IMPLEMENTATION
+// =============================================================================
+
 impl Game for Sekiro {
     fn id(&self) -> &'static str {
-        "sekiro"
+        GAME_ID
     }
 
     fn name(&self) -> &'static str {
-        "Sekiro: Shadows Die Twice"
+        GAME_NAME
     }
 
     fn process_names(&self) -> &[&'static str] {
-        &["sekiro.exe"]
+        PROCESS_NAMES
     }
 
     fn init_pointers(&mut self, ctx: &mut ProcessContext) -> Result<(), AutosplitterError> {
@@ -92,7 +119,7 @@ impl Game for Sekiro {
         self.reader = Some(ctx.reader());
         let reader = self.reader.as_ref().unwrap();
 
-        // Scan for EventFlagMan
+        // EventFlagMan (required)
         let pattern = parse_pattern(EVENT_FLAG_MAN_PATTERN);
         let efm_addr = ctx.scan_pattern(&pattern)
             .ok_or_else(|| AutosplitterError::PatternScanFailed(
@@ -107,7 +134,7 @@ impl Game for Sekiro {
         self.event_flag_man.initialize(ctx.is_64_bit, efm_resolved as i64, &[0x0]);
         log::info!("Sekiro: EventFlagMan at 0x{:X}", efm_resolved);
 
-        // Scan for FieldArea
+        // FieldArea (optional)
         let pattern = parse_pattern(FIELD_AREA_PATTERN);
         if let Some(found) = ctx.scan_pattern(&pattern) {
             if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
@@ -116,7 +143,7 @@ impl Game for Sekiro {
             }
         }
 
-        // Scan for WorldChrMan
+        // WorldChrMan (optional)
         let pattern = parse_pattern(WORLD_CHR_MAN_PATTERN);
         if let Some(found) = ctx.scan_pattern(&pattern) {
             if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
@@ -126,7 +153,7 @@ impl Game for Sekiro {
             }
         }
 
-        // Scan for IGT
+        // IGT (optional)
         let pattern = parse_pattern(IGT_PATTERN);
         if let Some(found) = ctx.scan_pattern(&pattern) {
             if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
@@ -135,7 +162,7 @@ impl Game for Sekiro {
             }
         }
 
-        // Scan for FadeManImp
+        // FadeManImp (optional)
         let pattern = parse_pattern(FADE_MAN_IMP_PATTERN);
         if let Some(found) = ctx.scan_pattern(&pattern) {
             if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
@@ -145,7 +172,7 @@ impl Game for Sekiro {
             }
         }
 
-        // Scan for PlayerGameData
+        // PlayerGameData (optional)
         let pattern = parse_pattern(PLAYER_GAME_DATA_PATTERN);
         if let Some(found) = ctx.scan_pattern(&pattern) {
             if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
@@ -169,6 +196,7 @@ impl Game for Sekiro {
             None => return false,
         };
 
+        // Category Decomposition algorithm with Sekiro-specific offsets
         let event_flag_id_div_10000000 = ((event_flag_id / 10_000_000) % 10) as i64;
         let event_flag_area = ((event_flag_id / 100_000) % 100) as i32;
         let event_flag_id_div_10000 = ((event_flag_id / 10_000) % 10) as i32;
@@ -254,8 +282,7 @@ impl Game for Sekiro {
             let bit_shift = 0x1f - ((mod_1000 as u8) & 0x1f);
             let mask = 1u32 << (bit_shift & 0x1f);
 
-            let result = value & mask;
-            return result != 0;
+            return (value & mask) != 0;
         }
 
         false
@@ -335,16 +362,8 @@ impl Game for Sekiro {
 
     fn supported_triggers(&self) -> Vec<TriggerTypeInfo> {
         vec![
-            TriggerTypeInfo {
-                id: "event_flag".to_string(),
-                name: "Event Flag".to_string(),
-                description: "Triggers when an event flag is set".to_string(),
-            },
-            TriggerTypeInfo {
-                id: "position".to_string(),
-                name: "Position".to_string(),
-                description: "Triggers when player enters an area".to_string(),
-            },
+            standard_event_flag_trigger(),
+            standard_position_trigger(),
         ]
     }
 
@@ -356,19 +375,22 @@ impl Game for Sekiro {
     }
 }
 
-/// Factory for creating Sekiro instances
+// =============================================================================
+// FACTORY
+// =============================================================================
+
 pub struct SekiroFactory;
 
-impl crate::games::GameFactory for SekiroFactory {
+impl GameFactory for SekiroFactory {
     fn game_id(&self) -> &'static str {
-        "sekiro"
+        GAME_ID
     }
 
     fn process_names(&self) -> &[&'static str] {
-        &["sekiro.exe"]
+        PROCESS_NAMES
     }
 
-    fn create(&self) -> crate::games::BoxedGame {
+    fn create(&self) -> BoxedGame {
         Box::new(Sekiro::new())
     }
 }

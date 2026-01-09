@@ -2,7 +2,18 @@
 //!
 //! This module defines the `Game` trait that all game implementations must satisfy,
 //! along with the `GameRegistry` for managing and discovering games.
+//!
+//! # Adding a New Game
+//!
+//! See `common.rs` for the standardized pattern and template.
+//!
+//! Quick steps:
+//! 1. Create `src/games/my_game.rs` following the template in `common.rs`
+//! 2. Add `pub mod my_game;` below
+//! 3. Add `pub use my_game::MyGameFactory;` to exports
+//! 4. Register in `registry.rs` `register_builtin()`
 
+mod common;
 mod registry;
 
 // Game implementations

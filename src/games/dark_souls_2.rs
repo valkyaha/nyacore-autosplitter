@@ -11,15 +11,29 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::{
-    Game, Position3D, TriggerTypeInfo, AttributeInfo,
+    Game, GameFactory, BoxedGame, Position3D, TriggerTypeInfo, AttributeInfo,
     CustomTriggerType, CustomTriggerParam, CustomTriggerParamType, CustomTriggerChoice,
+    common::{standard_event_flag_trigger, standard_position_trigger},
 };
 use crate::memory::{ProcessContext, MemoryReader, Pointer, parse_pattern, extract_relative_address};
 use crate::AutosplitterError;
 
-// DS2 SOTFS patterns from SoulSplitter
+// =============================================================================
+// CONSTANTS
+// =============================================================================
+
+/// Game metadata
+pub const GAME_ID: &str = "dark-souls-2";
+pub const GAME_NAME: &str = "Dark Souls II: Scholar of the First Sin";
+pub const PROCESS_NAMES: &[&str] = &["DarkSoulsII.exe"];
+
+/// Memory patterns from SoulSplitter
 pub const GAME_MANAGER_IMP_PATTERN: &str = "48 8b 35 ?? ?? ?? ?? 48 8b e9 48 85 f6";
 pub const LOAD_STATE_PATTERN: &str = "48 89 05 ?? ?? ?? ?? b0 01 48 83 c4 28";
+
+// =============================================================================
+// ATTRIBUTES
+// =============================================================================
 
 /// Character attributes for DS2
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,6 +50,10 @@ pub enum Attribute {
     Intelligence = 0xE,
     Faith = 0x10,
 }
+
+// =============================================================================
+// BOSS TYPES
+// =============================================================================
 
 /// Boss types for DS2 - offsets into boss counter array
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,12 +101,17 @@ pub enum BossType {
     LudAndZallen = 0xa0,
 }
 
+// =============================================================================
+// GAME IMPLEMENTATION
+// =============================================================================
+
 /// Dark Souls 2 SOTFS game implementation
 pub struct DarkSouls2 {
+    // Core state
     reader: Option<Arc<dyn MemoryReader>>,
     initialized: bool,
 
-    // Core pointers
+    // Memory pointers
     game_manager_imp: Pointer,
     load_state: Pointer,
 
@@ -111,6 +134,7 @@ impl DarkSouls2 {
         }
     }
 
+    /// Get the memory reader if available
     fn reader(&self) -> Option<&dyn MemoryReader> {
         self.reader.as_ref().map(|r| r.as_ref())
     }
@@ -123,6 +147,65 @@ impl DarkSouls2 {
         };
         self.boss_counters.read_i32(reader, Some(boss_type as i64))
     }
+
+    /// Build the list of boss choices for custom triggers
+    fn build_boss_choices() -> Vec<CustomTriggerChoice> {
+        vec![
+            // Base Game - Forest of Fallen Giants / Heide's Tower
+            CustomTriggerChoice { value: "0".to_string(), label: "Last Giant".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "4".to_string(), label: "The Pursuer".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "32".to_string(), label: "Dragonrider".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "36".to_string(), label: "Old Dragonslayer".to_string(), group: Some("Base Game".to_string()) },
+            // No-Man's Wharf / Lost Bastille
+            CustomTriggerChoice { value: "40".to_string(), label: "Flexile Sentry".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "44".to_string(), label: "Ruin Sentinels".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "24".to_string(), label: "Lost Sinner".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "48".to_string(), label: "Belfry Gargoyles".to_string(), group: Some("Base Game".to_string()) },
+            // Harvest Valley / Earthen Peak / Iron Keep
+            CustomTriggerChoice { value: "88".to_string(), label: "Covetous Demon".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "84".to_string(), label: "Mytha, the Baneful Queen".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "80".to_string(), label: "Smelter Demon".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "28".to_string(), label: "Old Iron King".to_string(), group: Some("Base Game".to_string()) },
+            // Shaded Woods / Doors of Pharros / Brightstone Cove
+            CustomTriggerChoice { value: "60".to_string(), label: "Scorpioness Najka".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "64".to_string(), label: "Royal Rat Authority".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "56".to_string(), label: "Prowling Magus".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "20".to_string(), label: "The Duke's Dear Freja".to_string(), group: Some("Base Game".to_string()) },
+            // Grave of Saints / The Gutter / Black Gulch
+            CustomTriggerChoice { value: "52".to_string(), label: "Royal Rat Vanguard".to_string(), group: Some("Base Game".to_string()) },
+            // Huntsman's Copse / Undead Purgatory
+            CustomTriggerChoice { value: "68".to_string(), label: "Skeleton Lords".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "72".to_string(), label: "Executioner's Chariot".to_string(), group: Some("Base Game".to_string()) },
+            // Drangleic Castle / King's Passage
+            CustomTriggerChoice { value: "92".to_string(), label: "Looking Glass Knight".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "96".to_string(), label: "Dragonslayer Armour".to_string(), group: Some("Base Game".to_string()) },
+            // Shrine of Amana / Undead Crypt
+            CustomTriggerChoice { value: "100".to_string(), label: "Demon of Song".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "120".to_string(), label: "Velstadt, the Royal Aegis".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "116".to_string(), label: "Vendrick".to_string(), group: Some("Base Game".to_string()) },
+            // Memory of the Old Iron King / Aldia's Keep / Dragon Aerie
+            CustomTriggerChoice { value: "104".to_string(), label: "Giant Lord".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "108".to_string(), label: "Guardian Dragon".to_string(), group: Some("Base Game".to_string()) },
+            // Throne of Want
+            CustomTriggerChoice { value: "8".to_string(), label: "Twin Dragonriders".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "12".to_string(), label: "Nashandra".to_string(), group: Some("Base Game".to_string()) },
+            CustomTriggerChoice { value: "16".to_string(), label: "Aldia, Scholar of the First Sin".to_string(), group: Some("Base Game".to_string()) },
+            // Dark Chasm of Old
+            CustomTriggerChoice { value: "112".to_string(), label: "Darklurker".to_string(), group: Some("Base Game".to_string()) },
+            // DLC - Crown of the Sunken King
+            CustomTriggerChoice { value: "128".to_string(), label: "Elana, the Squalid Queen".to_string(), group: Some("DLC - Sunken King".to_string()) },
+            CustomTriggerChoice { value: "132".to_string(), label: "Sinh, the Slumbering Dragon".to_string(), group: Some("DLC - Sunken King".to_string()) },
+            CustomTriggerChoice { value: "136".to_string(), label: "Afflicted Graverobber Trio".to_string(), group: Some("DLC - Sunken King".to_string()) },
+            // DLC - Crown of the Old Iron King
+            CustomTriggerChoice { value: "124".to_string(), label: "Fume Knight".to_string(), group: Some("DLC - Old Iron King".to_string()) },
+            CustomTriggerChoice { value: "140".to_string(), label: "Sir Alonne".to_string(), group: Some("DLC - Old Iron King".to_string()) },
+            CustomTriggerChoice { value: "144".to_string(), label: "Blue Smelter Demon".to_string(), group: Some("DLC - Old Iron King".to_string()) },
+            // DLC - Crown of the Ivory King
+            CustomTriggerChoice { value: "148".to_string(), label: "Aava, the King's Pet".to_string(), group: Some("DLC - Ivory King".to_string()) },
+            CustomTriggerChoice { value: "156".to_string(), label: "Burnt Ivory King".to_string(), group: Some("DLC - Ivory King".to_string()) },
+            CustomTriggerChoice { value: "160".to_string(), label: "Lud and Zallen".to_string(), group: Some("DLC - Ivory King".to_string()) },
+        ]
+    }
 }
 
 impl Default for DarkSouls2 {
@@ -131,17 +214,21 @@ impl Default for DarkSouls2 {
     }
 }
 
+// =============================================================================
+// GAME TRAIT IMPLEMENTATION
+// =============================================================================
+
 impl Game for DarkSouls2 {
     fn id(&self) -> &'static str {
-        "dark-souls-2"
+        GAME_ID
     }
 
     fn name(&self) -> &'static str {
-        "Dark Souls II: Scholar of the First Sin"
+        GAME_NAME
     }
 
     fn process_names(&self) -> &[&'static str] {
-        &["DarkSoulsII.exe"]
+        PROCESS_NAMES
     }
 
     fn init_pointers(&mut self, ctx: &mut ProcessContext) -> Result<(), AutosplitterError> {
@@ -151,7 +238,7 @@ impl Game for DarkSouls2 {
         self.reader = Some(ctx.reader());
         let reader = self.reader.as_ref().unwrap();
 
-        // Scan for GameManagerImp
+        // GameManagerImp (required)
         let pattern = parse_pattern(GAME_MANAGER_IMP_PATTERN);
         let game_manager_addr = ctx.scan_pattern(&pattern)
             .ok_or_else(|| AutosplitterError::PatternScanFailed(
@@ -176,7 +263,7 @@ impl Game for DarkSouls2 {
         // Attributes: GameManagerImp -> 0x0 -> 0xd0 -> 0x490
         self.attributes.initialize(ctx.is_64_bit, game_manager_resolved as i64, &[0x0, 0xd0, 0x490]);
 
-        // Scan for LoadState
+        // LoadState (optional)
         let pattern = parse_pattern(LOAD_STATE_PATTERN);
         if let Some(found) = ctx.scan_pattern(&pattern) {
             if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
@@ -200,12 +287,10 @@ impl Game for DarkSouls2 {
         if !self.initialized {
             return 0;
         }
-
         let reader = match self.reader() {
             Some(r) => r,
             None => return 0,
         };
-
         self.boss_counters.read_i32(reader, Some(flag_id as i64)) as u32
     }
 
@@ -291,21 +376,13 @@ impl Game for DarkSouls2 {
 
     fn supported_triggers(&self) -> Vec<TriggerTypeInfo> {
         vec![
-            TriggerTypeInfo {
-                id: "event_flag".to_string(),
-                name: "Event Flag".to_string(),
-                description: "Triggers when an event flag is set".to_string(),
-            },
+            standard_event_flag_trigger(),
             TriggerTypeInfo {
                 id: "kill_count".to_string(),
                 name: "Kill Count".to_string(),
                 description: "Triggers based on boss kill count (supports ascetics)".to_string(),
             },
-            TriggerTypeInfo {
-                id: "position".to_string(),
-                name: "Position".to_string(),
-                description: "Triggers when player enters an area".to_string(),
-            },
+            standard_position_trigger(),
         ]
     }
 
@@ -334,61 +411,7 @@ impl Game for DarkSouls2 {
                         id: "boss".to_string(),
                         name: "Boss".to_string(),
                         param_type: CustomTriggerParamType::Select,
-                        choices: Some(vec![
-                            // Base Game - Forest of Fallen Giants / Heide's Tower
-                            CustomTriggerChoice { value: "0".to_string(), label: "Last Giant".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "4".to_string(), label: "The Pursuer".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "32".to_string(), label: "Dragonrider".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "36".to_string(), label: "Old Dragonslayer".to_string(), group: Some("Base Game".to_string()) },
-                            // No-Man's Wharf / Lost Bastille
-                            CustomTriggerChoice { value: "40".to_string(), label: "Flexile Sentry".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "44".to_string(), label: "Ruin Sentinels".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "24".to_string(), label: "Lost Sinner".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "48".to_string(), label: "Belfry Gargoyles".to_string(), group: Some("Base Game".to_string()) },
-                            // Harvest Valley / Earthen Peak / Iron Keep
-                            CustomTriggerChoice { value: "88".to_string(), label: "Covetous Demon".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "84".to_string(), label: "Mytha, the Baneful Queen".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "80".to_string(), label: "Smelter Demon".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "28".to_string(), label: "Old Iron King".to_string(), group: Some("Base Game".to_string()) },
-                            // Shaded Woods / Doors of Pharros / Brightstone Cove
-                            CustomTriggerChoice { value: "60".to_string(), label: "Scorpioness Najka".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "64".to_string(), label: "Royal Rat Authority".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "56".to_string(), label: "Prowling Magus".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "20".to_string(), label: "The Duke's Dear Freja".to_string(), group: Some("Base Game".to_string()) },
-                            // Grave of Saints / The Gutter / Black Gulch
-                            CustomTriggerChoice { value: "52".to_string(), label: "Royal Rat Vanguard".to_string(), group: Some("Base Game".to_string()) },
-                            // Huntsman's Copse / Undead Purgatory
-                            CustomTriggerChoice { value: "68".to_string(), label: "Skeleton Lords".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "72".to_string(), label: "Executioner's Chariot".to_string(), group: Some("Base Game".to_string()) },
-                            // Drangleic Castle / King's Passage
-                            CustomTriggerChoice { value: "92".to_string(), label: "Looking Glass Knight".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "96".to_string(), label: "Dragonslayer Armour (Mirror Knight)".to_string(), group: Some("Base Game".to_string()) },
-                            // Shrine of Amana / Undead Crypt
-                            CustomTriggerChoice { value: "100".to_string(), label: "Demon of Song".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "120".to_string(), label: "Velstadt, the Royal Aegis".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "116".to_string(), label: "Vendrick".to_string(), group: Some("Base Game".to_string()) },
-                            // Memory of the Old Iron King / Aldia's Keep / Dragon Aerie
-                            CustomTriggerChoice { value: "104".to_string(), label: "Giant Lord".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "108".to_string(), label: "Guardian Dragon".to_string(), group: Some("Base Game".to_string()) },
-                            // Throne of Want
-                            CustomTriggerChoice { value: "8".to_string(), label: "Twin Dragonriders".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "12".to_string(), label: "Nashandra".to_string(), group: Some("Base Game".to_string()) },
-                            CustomTriggerChoice { value: "16".to_string(), label: "Aldia, Scholar of the First Sin".to_string(), group: Some("Base Game".to_string()) },
-                            // Dark Chasm of Old
-                            CustomTriggerChoice { value: "112".to_string(), label: "Darklurker".to_string(), group: Some("Base Game".to_string()) },
-                            // DLC - Crown of the Sunken King
-                            CustomTriggerChoice { value: "128".to_string(), label: "Elana, the Squalid Queen".to_string(), group: Some("DLC - Sunken King".to_string()) },
-                            CustomTriggerChoice { value: "132".to_string(), label: "Sinh, the Slumbering Dragon".to_string(), group: Some("DLC - Sunken King".to_string()) },
-                            CustomTriggerChoice { value: "136".to_string(), label: "Afflicted Graverobber, Ancient Soldier Varg, Cerah the Old Explorer".to_string(), group: Some("DLC - Sunken King".to_string()) },
-                            // DLC - Crown of the Old Iron King
-                            CustomTriggerChoice { value: "124".to_string(), label: "Fume Knight".to_string(), group: Some("DLC - Old Iron King".to_string()) },
-                            CustomTriggerChoice { value: "140".to_string(), label: "Sir Alonne".to_string(), group: Some("DLC - Old Iron King".to_string()) },
-                            CustomTriggerChoice { value: "144".to_string(), label: "Blue Smelter Demon".to_string(), group: Some("DLC - Old Iron King".to_string()) },
-                            // DLC - Crown of the Ivory King
-                            CustomTriggerChoice { value: "148".to_string(), label: "Aava, the King's Pet".to_string(), group: Some("DLC - Ivory King".to_string()) },
-                            CustomTriggerChoice { value: "156".to_string(), label: "Burnt Ivory King".to_string(), group: Some("DLC - Ivory King".to_string()) },
-                            CustomTriggerChoice { value: "160".to_string(), label: "Lud and Zallen, the King's Pets".to_string(), group: Some("DLC - Ivory King".to_string()) },
-                        ]),
+                        choices: Some(Self::build_boss_choices()),
                         default_value: Some("0".to_string()),
                         required: true,
                     },
@@ -443,19 +466,22 @@ impl Game for DarkSouls2 {
     }
 }
 
-/// Factory for creating DarkSouls2 instances
+// =============================================================================
+// FACTORY
+// =============================================================================
+
 pub struct DarkSouls2Factory;
 
-impl crate::games::GameFactory for DarkSouls2Factory {
+impl GameFactory for DarkSouls2Factory {
     fn game_id(&self) -> &'static str {
-        "dark-souls-2"
+        GAME_ID
     }
 
     fn process_names(&self) -> &[&'static str] {
-        &["DarkSoulsII.exe"]
+        PROCESS_NAMES
     }
 
-    fn create(&self) -> crate::games::BoxedGame {
+    fn create(&self) -> BoxedGame {
         Box::new(DarkSouls2::new())
     }
 }

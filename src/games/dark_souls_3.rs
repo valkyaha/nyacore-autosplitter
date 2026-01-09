@@ -3,15 +3,27 @@
 //! Based on SoulSplitter by FrankvdStam:
 //! https://github.com/FrankvdStam/SoulSplitter
 //!
-//! This is a direct port of the memory reading and event flag logic from SoulSplitter.
+//! Uses Category Decomposition algorithm for event flag reading.
 
 use std::sync::Arc;
 
-use super::{Game, Position3D, TriggerTypeInfo, AttributeInfo};
+use super::{
+    Game, GameFactory, BoxedGame, Position3D, TriggerTypeInfo, AttributeInfo,
+    common::{standard_event_flag_trigger, standard_position_trigger, standard_loading_trigger, standard_igt_trigger},
+};
 use crate::memory::{ProcessContext, MemoryReader, Pointer, parse_pattern, extract_relative_address};
 use crate::AutosplitterError;
 
-// DS3 memory patterns from SoulSplitter
+// =============================================================================
+// CONSTANTS
+// =============================================================================
+
+/// Game metadata
+pub const GAME_ID: &str = "dark-souls-3";
+pub const GAME_NAME: &str = "Dark Souls III";
+pub const PROCESS_NAMES: &[&str] = &["DarkSoulsIII.exe"];
+
+/// Memory patterns from SoulSplitter
 pub const SPRJ_EVENT_FLAG_MAN_PATTERN: &str = "48 c7 05 ?? ?? ?? ?? 00 00 00 00 48 8b 7c 24 38 c7 46 54 ff ff ff ff 48 83 c4 20 5e c3";
 pub const FIELD_AREA_PATTERN: &str = "4c 8b 3d ?? ?? ?? ?? 8b 45 87 83 f8 ff 74 69 48 8d 4d 8f 48 89 4d 9f 89 45 8f 48 8d 55 8f 49 8b 4f 10";
 pub const NEW_MENU_SYSTEM_PATTERN: &str = "48 8b 0d ?? ?? ?? ?? 48 8b 7c 24 20 48 8b 5c 24 30 48 85 c9";
@@ -19,6 +31,10 @@ pub const GAME_DATA_MAN_PATTERN: &str = "48 8b 0d ?? ?? ?? ?? 4c 8d 44 24 40 45 
 pub const PLAYER_INS_PATTERN: &str = "48 8b 0d ?? ?? ?? ?? 45 33 c0 48 8d 55 e7 e8 ?? ?? ?? ?? 0f 2f";
 pub const LOADING_PATTERN: &str = "c6 05 ?? ?? ?? ?? ?? e8 ?? ?? ?? ?? 84 c0 0f 94 c0 e9";
 pub const SPRJ_FADE_IMP_PATTERN: &str = "48 8b 0d ?? ?? ?? ?? 4c 8d 4c 24 38 4c 8d 44 24 48 33 d2";
+
+// =============================================================================
+// ATTRIBUTES
+// =============================================================================
 
 /// Character attributes for DS3
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,15 +52,17 @@ pub enum Attribute {
     SoulLevel = 0x68,
 }
 
+// =============================================================================
+// GAME IMPLEMENTATION
+// =============================================================================
+
 /// Dark Souls III game implementation
 pub struct DarkSouls3 {
-    /// Memory reader (set during init_pointers)
+    // Core state
     reader: Option<Arc<dyn MemoryReader>>,
-
-    /// Whether pointers are initialized
     initialized: bool,
 
-    // Core pointers
+    // Memory pointers
     sprj_event_flag_man: Pointer,
     field_area: Pointer,
     new_menu_system: Pointer,
@@ -58,7 +76,7 @@ pub struct DarkSouls3 {
     sprj_chr_physics_module: Pointer,
     blackscreen: Pointer,
 
-    // Version-specific offset for IGT
+    // Version-specific offsets
     igt_offset: i64,
 }
 
@@ -77,138 +95,17 @@ impl DarkSouls3 {
             player_game_data: Pointer::new(),
             sprj_chr_physics_module: Pointer::new(),
             blackscreen: Pointer::new(),
-            igt_offset: 0xa4, // Default, 0x9c for older versions
+            igt_offset: 0xa4, // 0x9c for older versions
         }
     }
 
-    /// Get the reader, if available
+    /// Get the memory reader if available
     fn reader(&self) -> Option<&dyn MemoryReader> {
         self.reader.as_ref().map(|r| r.as_ref())
     }
-}
 
-impl Default for DarkSouls3 {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Game for DarkSouls3 {
-    fn id(&self) -> &'static str {
-        "dark-souls-3"
-    }
-
-    fn name(&self) -> &'static str {
-        "Dark Souls III"
-    }
-
-    fn process_names(&self) -> &[&'static str] {
-        &["DarkSoulsIII.exe"]
-    }
-
-    fn init_pointers(&mut self, ctx: &mut ProcessContext) -> Result<(), AutosplitterError> {
-        log::info!("DS3: Initializing pointers for base 0x{:X}, size 0x{:X}",
-            ctx.base_address, ctx.module_size);
-
-        // Store the reader
-        self.reader = Some(ctx.reader());
-
-        let reader = self.reader.as_ref().unwrap();
-
-        // Scan for SprjEventFlagMan pattern
-        let pattern = parse_pattern(SPRJ_EVENT_FLAG_MAN_PATTERN);
-        let sprj_addr = ctx.scan_pattern(&pattern)
-            .ok_or_else(|| AutosplitterError::PatternScanFailed(
-                "SprjEventFlagMan pattern not found".to_string()
-            ))?;
-
-        log::info!("DS3: SprjEventFlagMan pattern found at 0x{:X}", sprj_addr);
-
-        // Resolve RIP-relative address (offset position 3, instruction length 11)
-        let sprj_resolved = extract_relative_address(reader.as_ref(), sprj_addr, 3, 11)
-            .ok_or_else(|| AutosplitterError::PatternScanFailed(
-                "Failed to resolve SprjEventFlagMan RIP-relative address".to_string()
-            ))?;
-
-        self.sprj_event_flag_man.initialize(ctx.is_64_bit, sprj_resolved as i64, &[0x0]);
-        log::info!("DS3: SprjEventFlagMan at 0x{:X}", sprj_resolved);
-
-        // Scan for FieldArea
-        let pattern = parse_pattern(FIELD_AREA_PATTERN);
-        if let Some(found) = ctx.scan_pattern(&pattern) {
-            if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
-                self.field_area.initialize(ctx.is_64_bit, addr as i64, &[]);
-                log::info!("DS3: FieldArea at 0x{:X}", addr);
-            }
-        }
-
-        // Scan for NewMenuSystem
-        let pattern = parse_pattern(NEW_MENU_SYSTEM_PATTERN);
-        if let Some(found) = ctx.scan_pattern(&pattern) {
-            if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
-                self.new_menu_system.initialize(ctx.is_64_bit, addr as i64, &[0x0]);
-                log::info!("DS3: NewMenuSystem at 0x{:X}", addr);
-            }
-        }
-
-        // Scan for GameDataMan
-        let pattern = parse_pattern(GAME_DATA_MAN_PATTERN);
-        if let Some(found) = ctx.scan_pattern(&pattern) {
-            if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
-                self.game_data_man.initialize(ctx.is_64_bit, addr as i64, &[0x0]);
-                // PlayerGameData: GameDataMan -> 0x10
-                self.player_game_data.initialize(ctx.is_64_bit, addr as i64, &[0x0, 0x10]);
-                log::info!("DS3: GameDataMan at 0x{:X}", addr);
-            }
-        }
-
-        // Scan for PlayerIns
-        let pattern = parse_pattern(PLAYER_INS_PATTERN);
-        if let Some(found) = ctx.scan_pattern(&pattern) {
-            if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
-                self.player_ins.initialize(ctx.is_64_bit, addr as i64, &[0x0]);
-                // SprjChrPhysicsModule: PlayerIns -> 0x80 -> 0x40 -> 0x28
-                self.sprj_chr_physics_module.initialize(ctx.is_64_bit, addr as i64, &[0x0, 0x80, 0x40, 0x28]);
-                log::info!("DS3: PlayerIns at 0x{:X}", addr);
-            }
-        }
-
-        // Scan for Loading
-        let pattern = parse_pattern(LOADING_PATTERN);
-        if let Some(found) = ctx.scan_pattern(&pattern) {
-            if let Some(addr) = extract_relative_address(reader.as_ref(), found, 2, 7) {
-                self.loading.initialize(ctx.is_64_bit, addr as i64, &[]);
-                log::info!("DS3: Loading at 0x{:X}", addr);
-            }
-        }
-
-        // Scan for SprjFadeImp (blackscreen)
-        let pattern = parse_pattern(SPRJ_FADE_IMP_PATTERN);
-        if let Some(found) = ctx.scan_pattern(&pattern) {
-            if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
-                self.sprj_fade_imp.initialize(ctx.is_64_bit, addr as i64, &[0x0]);
-                // Blackscreen: SprjFadeImp -> 0x0 -> 0x8
-                self.blackscreen.initialize(ctx.is_64_bit, addr as i64, &[0x0, 0x8]);
-                log::info!("DS3: SprjFadeImp at 0x{:X}", addr);
-            }
-        }
-
-        self.initialized = true;
-        log::info!("DS3: All pointers initialized successfully");
-        Ok(())
-    }
-
-    fn read_event_flag(&self, event_flag_id: u32) -> bool {
-        if !self.initialized {
-            return false;
-        }
-
-        let reader = match self.reader() {
-            Some(r) => r,
-            None => return false,
-        };
-
-        // Decompose the flag ID
+    /// Read event flag using Category Decomposition algorithm
+    fn read_flag_category_decomposition(&self, reader: &dyn MemoryReader, event_flag_id: u32) -> bool {
         let event_flag_id_div_10000000 = ((event_flag_id / 10_000_000) % 10) as i64;
         let event_flag_area = ((event_flag_id / 100_000) % 100) as i32;
         let event_flag_id_div_10000 = ((event_flag_id / 10_000) % 10) as i32;
@@ -292,11 +189,128 @@ impl Game for DarkSouls3 {
             let bit_shift = 0x1f - ((mod_1000 as u8) & 0x1f);
             let mask = 1u32 << (bit_shift & 0x1f);
 
-            let result = value & mask;
-            return result != 0;
+            return (value & mask) != 0;
         }
 
         false
+    }
+}
+
+impl Default for DarkSouls3 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// =============================================================================
+// GAME TRAIT IMPLEMENTATION
+// =============================================================================
+
+impl Game for DarkSouls3 {
+    fn id(&self) -> &'static str {
+        GAME_ID
+    }
+
+    fn name(&self) -> &'static str {
+        GAME_NAME
+    }
+
+    fn process_names(&self) -> &[&'static str] {
+        PROCESS_NAMES
+    }
+
+    fn init_pointers(&mut self, ctx: &mut ProcessContext) -> Result<(), AutosplitterError> {
+        log::info!("DS3: Initializing pointers for base 0x{:X}, size 0x{:X}",
+            ctx.base_address, ctx.module_size);
+
+        self.reader = Some(ctx.reader());
+        let reader = self.reader.as_ref().unwrap();
+
+        // SprjEventFlagMan (required)
+        let pattern = parse_pattern(SPRJ_EVENT_FLAG_MAN_PATTERN);
+        let sprj_addr = ctx.scan_pattern(&pattern)
+            .ok_or_else(|| AutosplitterError::PatternScanFailed(
+                "SprjEventFlagMan pattern not found".to_string()
+            ))?;
+
+        let sprj_resolved = extract_relative_address(reader.as_ref(), sprj_addr, 3, 11)
+            .ok_or_else(|| AutosplitterError::PatternScanFailed(
+                "Failed to resolve SprjEventFlagMan RIP-relative address".to_string()
+            ))?;
+
+        self.sprj_event_flag_man.initialize(ctx.is_64_bit, sprj_resolved as i64, &[0x0]);
+        log::info!("DS3: SprjEventFlagMan at 0x{:X}", sprj_resolved);
+
+        // FieldArea (optional)
+        let pattern = parse_pattern(FIELD_AREA_PATTERN);
+        if let Some(found) = ctx.scan_pattern(&pattern) {
+            if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
+                self.field_area.initialize(ctx.is_64_bit, addr as i64, &[]);
+                log::info!("DS3: FieldArea at 0x{:X}", addr);
+            }
+        }
+
+        // NewMenuSystem (optional)
+        let pattern = parse_pattern(NEW_MENU_SYSTEM_PATTERN);
+        if let Some(found) = ctx.scan_pattern(&pattern) {
+            if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
+                self.new_menu_system.initialize(ctx.is_64_bit, addr as i64, &[0x0]);
+                log::info!("DS3: NewMenuSystem at 0x{:X}", addr);
+            }
+        }
+
+        // GameDataMan (optional)
+        let pattern = parse_pattern(GAME_DATA_MAN_PATTERN);
+        if let Some(found) = ctx.scan_pattern(&pattern) {
+            if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
+                self.game_data_man.initialize(ctx.is_64_bit, addr as i64, &[0x0]);
+                self.player_game_data.initialize(ctx.is_64_bit, addr as i64, &[0x0, 0x10]);
+                log::info!("DS3: GameDataMan at 0x{:X}", addr);
+            }
+        }
+
+        // PlayerIns (optional)
+        let pattern = parse_pattern(PLAYER_INS_PATTERN);
+        if let Some(found) = ctx.scan_pattern(&pattern) {
+            if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
+                self.player_ins.initialize(ctx.is_64_bit, addr as i64, &[0x0]);
+                self.sprj_chr_physics_module.initialize(ctx.is_64_bit, addr as i64, &[0x0, 0x80, 0x40, 0x28]);
+                log::info!("DS3: PlayerIns at 0x{:X}", addr);
+            }
+        }
+
+        // Loading (optional)
+        let pattern = parse_pattern(LOADING_PATTERN);
+        if let Some(found) = ctx.scan_pattern(&pattern) {
+            if let Some(addr) = extract_relative_address(reader.as_ref(), found, 2, 7) {
+                self.loading.initialize(ctx.is_64_bit, addr as i64, &[]);
+                log::info!("DS3: Loading at 0x{:X}", addr);
+            }
+        }
+
+        // SprjFadeImp / Blackscreen (optional)
+        let pattern = parse_pattern(SPRJ_FADE_IMP_PATTERN);
+        if let Some(found) = ctx.scan_pattern(&pattern) {
+            if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
+                self.sprj_fade_imp.initialize(ctx.is_64_bit, addr as i64, &[0x0]);
+                self.blackscreen.initialize(ctx.is_64_bit, addr as i64, &[0x0, 0x8]);
+                log::info!("DS3: SprjFadeImp at 0x{:X}", addr);
+            }
+        }
+
+        self.initialized = true;
+        log::info!("DS3: All pointers initialized successfully");
+        Ok(())
+    }
+
+    fn read_event_flag(&self, event_flag_id: u32) -> bool {
+        if !self.initialized {
+            return false;
+        }
+        match self.reader() {
+            Some(reader) => self.read_flag_category_decomposition(reader, event_flag_id),
+            None => false,
+        }
     }
 
     fn is_alive(&self) -> bool {
@@ -340,7 +354,6 @@ impl Game for DarkSouls3 {
         if addr == 0 {
             return None;
         }
-        // Reading at offset -1
         Some(reader.read_i32((addr - 1) as usize).unwrap_or(0) != 0)
     }
 
@@ -374,12 +387,10 @@ impl Game for DarkSouls3 {
         }
         let reader = self.reader()?;
 
-        // Check if player is loaded
         if !self.is_player_loaded().unwrap_or(false) {
             return None;
         }
 
-        // Check menu state (if menu state == 3, don't read)
         let menu_addr = self.new_menu_system.get_address(reader);
         if menu_addr != 0 {
             let menu_state = reader.read_i32(menu_addr as usize).unwrap_or(0);
@@ -411,26 +422,10 @@ impl Game for DarkSouls3 {
 
     fn supported_triggers(&self) -> Vec<TriggerTypeInfo> {
         vec![
-            TriggerTypeInfo {
-                id: "event_flag".to_string(),
-                name: "Event Flag".to_string(),
-                description: "Triggers when an event flag is set".to_string(),
-            },
-            TriggerTypeInfo {
-                id: "position".to_string(),
-                name: "Position".to_string(),
-                description: "Triggers when player enters an area".to_string(),
-            },
-            TriggerTypeInfo {
-                id: "loading".to_string(),
-                name: "Loading State".to_string(),
-                description: "Triggers on loading screen transitions".to_string(),
-            },
-            TriggerTypeInfo {
-                id: "igt".to_string(),
-                name: "In-Game Time".to_string(),
-                description: "Triggers based on in-game time".to_string(),
-            },
+            standard_event_flag_trigger(),
+            standard_position_trigger(),
+            standard_loading_trigger(),
+            standard_igt_trigger(),
         ]
     }
 
@@ -450,19 +445,22 @@ impl Game for DarkSouls3 {
     }
 }
 
-/// Factory for creating DarkSouls3 instances
+// =============================================================================
+// FACTORY
+// =============================================================================
+
 pub struct DarkSouls3Factory;
 
-impl crate::games::GameFactory for DarkSouls3Factory {
+impl GameFactory for DarkSouls3Factory {
     fn game_id(&self) -> &'static str {
-        "dark-souls-3"
+        GAME_ID
     }
 
     fn process_names(&self) -> &[&'static str] {
-        &["DarkSoulsIII.exe"]
+        PROCESS_NAMES
     }
 
-    fn create(&self) -> crate::games::BoxedGame {
+    fn create(&self) -> BoxedGame {
         Box::new(DarkSouls3::new())
     }
 }

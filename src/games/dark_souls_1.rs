@@ -5,21 +5,37 @@
 //!
 //! Credit to JKAnderson for the original event flag reading code (DSR-Gadget)
 //!
-//! DS1 uses an offset table approach for event flags.
+//! Uses Offset Table algorithm for event flag reading.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::{Game, Position3D, TriggerTypeInfo, AttributeInfo};
+use super::{
+    Game, GameFactory, BoxedGame, Position3D, TriggerTypeInfo, AttributeInfo,
+    common::{standard_event_flag_trigger, standard_position_trigger},
+};
 use crate::memory::{ProcessContext, MemoryReader, Pointer, parse_pattern, extract_relative_address};
 use crate::AutosplitterError;
 
-// DS1 Remastered patterns from SoulSplitter
+// =============================================================================
+// CONSTANTS
+// =============================================================================
+
+/// Game metadata
+pub const GAME_ID: &str = "dark-souls-1";
+pub const GAME_NAME: &str = "Dark Souls: Remastered";
+pub const PROCESS_NAMES: &[&str] = &["DarkSoulsRemastered.exe", "DARKSOULS.exe"];
+
+/// Memory patterns from SoulSplitter
 pub const EVENT_FLAGS_PATTERN: &str = "48 8B 0D ?? ?? ?? ?? 99 33 C2 45 33 C0 2B C2 8D 50 F6";
 pub const GAME_DATA_MAN_PATTERN: &str = "48 8b 05 ?? ?? ?? ?? 48 8b 50 10 48 89 54 24 60";
 pub const GAME_MAN_PATTERN: &str = "48 8b 05 ?? ?? ?? ?? c6 40 18 00";
 pub const WORLD_CHR_MAN_PATTERN: &str = "48 8b 0d ?? ?? ?? ?? 0f 28 f1 48 85 c9 74 ?? 48 89 7c";
 pub const MENU_MAN_PATTERN: &str = "48 8b 15 ?? ?? ?? ?? 89 82 7c 08 00 00";
+
+// =============================================================================
+// ATTRIBUTES
+// =============================================================================
 
 /// Character attributes for DS1
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,12 +53,17 @@ pub enum Attribute {
     SoulLevel = 0x28,
 }
 
+// =============================================================================
+// GAME IMPLEMENTATION
+// =============================================================================
+
 /// Dark Souls 1 Remastered game implementation
 pub struct DarkSouls1 {
+    // Core state
     reader: Option<Arc<dyn MemoryReader>>,
     initialized: bool,
 
-    // Core pointers
+    // Memory pointers
     event_flags: Pointer,
     game_data_man: Pointer,
     game_man: Pointer,
@@ -110,11 +131,12 @@ impl DarkSouls1 {
         }
     }
 
+    /// Get the memory reader if available
     fn reader(&self) -> Option<&dyn MemoryReader> {
         self.reader.as_ref().map(|r| r.as_ref())
     }
 
-    /// Get the offset and mask for an event flag
+    /// Get the offset and mask for an event flag using Offset Table algorithm
     fn get_event_flag_offset(&self, event_flag_id: u32) -> Option<(i32, u32)> {
         let id_string = format!("{:08}", event_flag_id);
         if id_string.len() != 8 {
@@ -145,17 +167,21 @@ impl Default for DarkSouls1 {
     }
 }
 
+// =============================================================================
+// GAME TRAIT IMPLEMENTATION
+// =============================================================================
+
 impl Game for DarkSouls1 {
     fn id(&self) -> &'static str {
-        "dark-souls-1"
+        GAME_ID
     }
 
     fn name(&self) -> &'static str {
-        "Dark Souls: Remastered"
+        GAME_NAME
     }
 
     fn process_names(&self) -> &[&'static str] {
-        &["DarkSoulsRemastered.exe", "DARKSOULS.exe"]
+        PROCESS_NAMES
     }
 
     fn init_pointers(&mut self, ctx: &mut ProcessContext) -> Result<(), AutosplitterError> {
@@ -165,7 +191,7 @@ impl Game for DarkSouls1 {
         self.reader = Some(ctx.reader());
         let reader = self.reader.as_ref().unwrap();
 
-        // Scan for EventFlags
+        // EventFlags (required)
         let pattern = parse_pattern(EVENT_FLAGS_PATTERN);
         let event_flags_addr = ctx.scan_pattern(&pattern)
             .ok_or_else(|| AutosplitterError::PatternScanFailed(
@@ -181,7 +207,7 @@ impl Game for DarkSouls1 {
         self.event_flags.initialize(ctx.is_64_bit, event_flags_resolved as i64, &[0x0, 0x0, 0x0]);
         log::info!("DS1R: EventFlags at 0x{:X}", event_flags_resolved);
 
-        // Scan for GameDataMan
+        // GameDataMan (optional)
         let pattern = parse_pattern(GAME_DATA_MAN_PATTERN);
         if let Some(found) = ctx.scan_pattern(&pattern) {
             if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
@@ -191,7 +217,7 @@ impl Game for DarkSouls1 {
             }
         }
 
-        // Scan for GameMan
+        // GameMan (optional)
         let pattern = parse_pattern(GAME_MAN_PATTERN);
         if let Some(found) = ctx.scan_pattern(&pattern) {
             if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
@@ -200,7 +226,7 @@ impl Game for DarkSouls1 {
             }
         }
 
-        // Scan for WorldChrMan
+        // WorldChrMan (optional)
         let pattern = parse_pattern(WORLD_CHR_MAN_PATTERN);
         if let Some(found) = ctx.scan_pattern(&pattern) {
             if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
@@ -211,7 +237,7 @@ impl Game for DarkSouls1 {
             }
         }
 
-        // Scan for MenuMan
+        // MenuMan (optional)
         let pattern = parse_pattern(MENU_MAN_PATTERN);
         if let Some(found) = ctx.scan_pattern(&pattern) {
             if let Some(addr) = extract_relative_address(reader.as_ref(), found, 3, 7) {
@@ -369,16 +395,8 @@ impl Game for DarkSouls1 {
 
     fn supported_triggers(&self) -> Vec<TriggerTypeInfo> {
         vec![
-            TriggerTypeInfo {
-                id: "event_flag".to_string(),
-                name: "Event Flag".to_string(),
-                description: "Triggers when an event flag is set".to_string(),
-            },
-            TriggerTypeInfo {
-                id: "position".to_string(),
-                name: "Position".to_string(),
-                description: "Triggers when player enters an area".to_string(),
-            },
+            standard_event_flag_trigger(),
+            standard_position_trigger(),
         ]
     }
 
@@ -396,19 +414,22 @@ impl Game for DarkSouls1 {
     }
 }
 
-/// Factory for creating DarkSouls1 instances
+// =============================================================================
+// FACTORY
+// =============================================================================
+
 pub struct DarkSouls1Factory;
 
-impl crate::games::GameFactory for DarkSouls1Factory {
+impl GameFactory for DarkSouls1Factory {
     fn game_id(&self) -> &'static str {
-        "dark-souls-1"
+        GAME_ID
     }
 
     fn process_names(&self) -> &[&'static str] {
-        &["DarkSoulsRemastered.exe", "DARKSOULS.exe"]
+        PROCESS_NAMES
     }
 
-    fn create(&self) -> crate::games::BoxedGame {
+    fn create(&self) -> BoxedGame {
         Box::new(DarkSouls1::new())
     }
 }
