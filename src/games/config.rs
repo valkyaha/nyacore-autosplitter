@@ -139,13 +139,15 @@ fn default_world_block_struct_size() -> i64 { 0x70 }
 /// Binary tree configuration (Elden Ring/AC6)
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TreeConfig {
-    pub pattern: String,
+    pub primary_pattern: String,
+    #[serde(default)]
+    pub pointer_chain: Vec<i64>,
     #[serde(default = "default_divisor_offset")]
     pub divisor_offset: i64,      // 0x1c
     #[serde(default = "default_tree_root_offset")]
     pub tree_root_offset: i64,    // 0x38
-    #[serde(default = "default_mult_offset")]
-    pub mult_offset: i64,         // 0x20
+    #[serde(default = "default_mult_offset", alias = "mult_offset")]
+    pub multiplier_offset: i64,   // 0x20
     #[serde(default = "default_base_addr_offset")]
     pub base_addr_offset: i64,    // 0x28
 }
@@ -158,7 +160,7 @@ fn default_base_addr_offset() -> i64 { 0x28 }
 /// Offset table configuration (DS1)
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OffsetTableConfig {
-    pub pattern: String,
+    pub primary_pattern: String,
     #[serde(default)]
     pub group_offsets: HashMap<String, i64>,
     #[serde(default)]
@@ -168,9 +170,9 @@ pub struct OffsetTableConfig {
 /// Kill counter configuration (DS2)
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct KillCounterConfig {
-    pub pattern: String,
-    #[serde(default)]
-    pub pointer_chain: Vec<i64>,
+    pub primary_pattern: String,
+    #[serde(default, alias = "pointer_chain")]
+    pub chain_offsets: Vec<i64>,
     #[serde(default)]
     pub bosses: Vec<BossConfig>,
 }

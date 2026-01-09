@@ -283,7 +283,7 @@ impl ConfigurableGame {
             None => return false,
         };
 
-        let ptr = match self.get_pattern(&config.pattern) {
+        let ptr = match self.get_pattern(&config.primary_pattern) {
             Some(p) => p,
             None => return false,
         };
@@ -327,7 +327,7 @@ impl ConfigurableGame {
         let mystery = reader.read_i32((curr_addr + 0x28) as usize).unwrap_or(0) - 1;
 
         let calc_ptr: i64 = if mystery == 0 {
-            let mult = ptr.read_i32(reader, Some(config.mult_offset));
+            let mult = ptr.read_i32(reader, Some(config.multiplier_offset));
             let elem = reader.read_i32((curr_addr + 0x30) as usize).unwrap_or(0);
             let base = ptr.read_i64(reader, Some(config.base_addr_offset));
             (mult as i64 * elem as i64) + base
@@ -359,7 +359,7 @@ impl ConfigurableGame {
             None => return false,
         };
 
-        let ptr = match self.get_pattern(&config.pattern) {
+        let ptr = match self.get_pattern(&config.primary_pattern) {
             Some(p) => p,
             None => return false,
         };
@@ -418,7 +418,7 @@ impl ConfigurableGame {
             None => return 0,
         };
 
-        let ptr = match self.get_pattern(&config.pattern) {
+        let ptr = match self.get_pattern(&config.primary_pattern) {
             Some(p) => p,
             None => return 0,
         };
