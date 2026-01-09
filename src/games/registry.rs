@@ -34,6 +34,15 @@ impl GameRegistry {
         }
     }
 
+    /// Create a new registry and load all games from a plugins directory
+    /// This is the preferred way to create a registry - games are loaded from
+    /// TOML configuration files in NYA-Core-Assets/plugins
+    pub fn from_plugins_dir(plugins_dir: &Path) -> Self {
+        let mut registry = Self::new();
+        registry.register_from_plugins_dir(plugins_dir);
+        registry
+    }
+
     /// Register a game factory
     pub fn register(&mut self, factory: Box<dyn GameFactory>) {
         let game_id = factory.game_id().to_string();
@@ -47,7 +56,9 @@ impl GameRegistry {
         self.factories.insert(game_id, factory);
     }
 
-    /// Register all built-in games
+    /// Register built-in hardcoded games (fallback when configs unavailable)
+    /// DEPRECATED: Use register_from_plugins_dir() instead
+    #[deprecated(note = "Use register_from_plugins_dir() to load games from TOML configs")]
     pub fn register_builtin(&mut self) {
         use super::{
             DarkSouls1Factory,
@@ -58,7 +69,7 @@ impl GameRegistry {
             ArmoredCore6Factory,
         };
 
-        log::info!("Registering built-in games");
+        log::warn!("Using deprecated register_builtin() - prefer register_from_plugins_dir()");
 
         self.register(Box::new(DarkSouls1Factory));
         self.register(Box::new(DarkSouls2Factory));

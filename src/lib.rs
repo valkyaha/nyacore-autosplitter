@@ -14,10 +14,12 @@
 //! # Example
 //!
 //! ```no_run
+//! use std::path::Path;
 //! use nyacore_autosplitter::{Autosplitter, GameRegistry};
 //!
-//! let mut registry = GameRegistry::new();
-//! registry.register_builtin();
+//! // Load games from NYA-Core-Assets plugins directory
+//! let plugins_dir = Path::new("path/to/NYA-Core-Assets/plugins");
+//! let registry = GameRegistry::from_plugins_dir(plugins_dir);
 //!
 //! let mut autosplitter = Autosplitter::new(registry);
 //! autosplitter.start_autodetect().unwrap();
