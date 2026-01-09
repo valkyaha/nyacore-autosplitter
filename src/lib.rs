@@ -36,7 +36,11 @@ pub mod vision;
 pub use crate::core::{
     Autosplitter, AutosplitterState, BossFlag, SplitEvent, SplitTriggerConfig,
 };
-pub use crate::games::{Game, GameFactory, GameRegistry};
+pub use crate::games::{
+    Game, GameFactory, GameRegistry,
+    CustomTriggerType, CustomTriggerParam, CustomTriggerParamType, CustomTriggerChoice,
+    TriggerTypeInfo, AttributeInfo,
+};
 pub use crate::memory::{MemoryReader, ProcessContext};
 pub use crate::readers::FlagReader;
 pub use crate::triggers::{

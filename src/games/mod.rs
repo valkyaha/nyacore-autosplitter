@@ -25,12 +25,14 @@ pub use armored_core_6::ArmoredCore6Factory;
 
 use crate::memory::ProcessContext;
 use crate::AutosplitterError;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 // Re-export Position3D from triggers for convenience
 pub use crate::triggers::Position3D;
 
 /// Information about supported trigger types for a game
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TriggerTypeInfo {
     pub id: String,
     pub name: String,
@@ -38,10 +40,78 @@ pub struct TriggerTypeInfo {
 }
 
 /// Information about character attributes
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttributeInfo {
     pub id: String,
     pub name: String,
+}
+
+// =============================================================================
+// CUSTOM TRIGGERS
+// =============================================================================
+
+/// A custom trigger type that a game can publish
+/// These are game-specific triggers that go beyond standard event flags
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomTriggerType {
+    /// Unique ID for this trigger type (e.g., "kill_counter", "mission_complete")
+    pub id: String,
+    /// Human-readable name
+    pub name: String,
+    /// Description of what this trigger does
+    pub description: String,
+    /// Parameters this trigger accepts
+    pub parameters: Vec<CustomTriggerParam>,
+}
+
+/// A parameter for a custom trigger
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomTriggerParam {
+    /// Parameter ID (e.g., "boss_id", "threshold")
+    pub id: String,
+    /// Human-readable name
+    pub name: String,
+    /// Parameter type
+    pub param_type: CustomTriggerParamType,
+    /// Optional list of choices for "select" type
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub choices: Option<Vec<CustomTriggerChoice>>,
+    /// Default value (as string, will be parsed based on param_type)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_value: Option<String>,
+    /// Whether this parameter is required
+    #[serde(default = "default_true")]
+    pub required: bool,
+}
+
+fn default_true() -> bool { true }
+
+/// Parameter types for custom triggers
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum CustomTriggerParamType {
+    /// Integer value
+    Int,
+    /// String value
+    String,
+    /// Boolean value
+    Bool,
+    /// Selection from a list of choices
+    Select,
+    /// Comparison operator (>=, <=, ==, >, <)
+    Comparison,
+}
+
+/// A choice option for select-type parameters
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomTriggerChoice {
+    /// The value to use when this choice is selected
+    pub value: String,
+    /// Human-readable label for display
+    pub label: String,
+    /// Optional group for organizing choices (e.g., "Base Game", "DLC")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
 }
 
 /// Trait that all game implementations must satisfy
@@ -158,6 +228,18 @@ pub trait Game: Send + Sync {
     /// Get available attributes for this game
     fn available_attributes(&self) -> Vec<AttributeInfo> {
         vec![]
+    }
+
+    /// Get custom trigger types available for this game
+    /// These are game-specific triggers beyond standard event flags
+    fn custom_triggers(&self) -> Vec<CustomTriggerType> {
+        vec![]
+    }
+
+    /// Evaluate a custom trigger with the given parameters
+    /// Returns true if the trigger condition is met
+    fn evaluate_custom_trigger(&self, _trigger_id: &str, _params: &HashMap<String, String>) -> bool {
+        false
     }
 }
 

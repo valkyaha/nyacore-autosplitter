@@ -7,9 +7,13 @@
 //! Each boss has an offset from the BossCounters base address.
 //! Killing a boss increments the counter at that offset.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::{Game, Position3D, TriggerTypeInfo, AttributeInfo};
+use super::{
+    Game, Position3D, TriggerTypeInfo, AttributeInfo,
+    CustomTriggerType, CustomTriggerParam, CustomTriggerParamType, CustomTriggerChoice,
+};
 use crate::memory::{ProcessContext, MemoryReader, Pointer, parse_pattern, extract_relative_address};
 use crate::AutosplitterError;
 
@@ -317,6 +321,125 @@ impl Game for DarkSouls2 {
             AttributeInfo { id: "intelligence".to_string(), name: "Intelligence".to_string() },
             AttributeInfo { id: "faith".to_string(), name: "Faith".to_string() },
         ]
+    }
+
+    fn custom_triggers(&self) -> Vec<CustomTriggerType> {
+        vec![
+            CustomTriggerType {
+                id: "kill_counter".to_string(),
+                name: "Kill Counter".to_string(),
+                description: "Triggers when boss kill count reaches a threshold (supports ascetics)".to_string(),
+                parameters: vec![
+                    CustomTriggerParam {
+                        id: "boss".to_string(),
+                        name: "Boss".to_string(),
+                        param_type: CustomTriggerParamType::Select,
+                        choices: Some(vec![
+                            // Base Game - Forest of Fallen Giants / Heide's Tower
+                            CustomTriggerChoice { value: "0".to_string(), label: "Last Giant".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "4".to_string(), label: "The Pursuer".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "32".to_string(), label: "Dragonrider".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "36".to_string(), label: "Old Dragonslayer".to_string(), group: Some("Base Game".to_string()) },
+                            // No-Man's Wharf / Lost Bastille
+                            CustomTriggerChoice { value: "40".to_string(), label: "Flexile Sentry".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "44".to_string(), label: "Ruin Sentinels".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "24".to_string(), label: "Lost Sinner".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "48".to_string(), label: "Belfry Gargoyles".to_string(), group: Some("Base Game".to_string()) },
+                            // Harvest Valley / Earthen Peak / Iron Keep
+                            CustomTriggerChoice { value: "88".to_string(), label: "Covetous Demon".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "84".to_string(), label: "Mytha, the Baneful Queen".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "80".to_string(), label: "Smelter Demon".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "28".to_string(), label: "Old Iron King".to_string(), group: Some("Base Game".to_string()) },
+                            // Shaded Woods / Doors of Pharros / Brightstone Cove
+                            CustomTriggerChoice { value: "60".to_string(), label: "Scorpioness Najka".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "64".to_string(), label: "Royal Rat Authority".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "56".to_string(), label: "Prowling Magus".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "20".to_string(), label: "The Duke's Dear Freja".to_string(), group: Some("Base Game".to_string()) },
+                            // Grave of Saints / The Gutter / Black Gulch
+                            CustomTriggerChoice { value: "52".to_string(), label: "Royal Rat Vanguard".to_string(), group: Some("Base Game".to_string()) },
+                            // Huntsman's Copse / Undead Purgatory
+                            CustomTriggerChoice { value: "68".to_string(), label: "Skeleton Lords".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "72".to_string(), label: "Executioner's Chariot".to_string(), group: Some("Base Game".to_string()) },
+                            // Drangleic Castle / King's Passage
+                            CustomTriggerChoice { value: "92".to_string(), label: "Looking Glass Knight".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "96".to_string(), label: "Dragonslayer Armour (Mirror Knight)".to_string(), group: Some("Base Game".to_string()) },
+                            // Shrine of Amana / Undead Crypt
+                            CustomTriggerChoice { value: "100".to_string(), label: "Demon of Song".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "120".to_string(), label: "Velstadt, the Royal Aegis".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "116".to_string(), label: "Vendrick".to_string(), group: Some("Base Game".to_string()) },
+                            // Memory of the Old Iron King / Aldia's Keep / Dragon Aerie
+                            CustomTriggerChoice { value: "104".to_string(), label: "Giant Lord".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "108".to_string(), label: "Guardian Dragon".to_string(), group: Some("Base Game".to_string()) },
+                            // Throne of Want
+                            CustomTriggerChoice { value: "8".to_string(), label: "Twin Dragonriders".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "12".to_string(), label: "Nashandra".to_string(), group: Some("Base Game".to_string()) },
+                            CustomTriggerChoice { value: "16".to_string(), label: "Aldia, Scholar of the First Sin".to_string(), group: Some("Base Game".to_string()) },
+                            // Dark Chasm of Old
+                            CustomTriggerChoice { value: "112".to_string(), label: "Darklurker".to_string(), group: Some("Base Game".to_string()) },
+                            // DLC - Crown of the Sunken King
+                            CustomTriggerChoice { value: "128".to_string(), label: "Elana, the Squalid Queen".to_string(), group: Some("DLC - Sunken King".to_string()) },
+                            CustomTriggerChoice { value: "132".to_string(), label: "Sinh, the Slumbering Dragon".to_string(), group: Some("DLC - Sunken King".to_string()) },
+                            CustomTriggerChoice { value: "136".to_string(), label: "Afflicted Graverobber, Ancient Soldier Varg, Cerah the Old Explorer".to_string(), group: Some("DLC - Sunken King".to_string()) },
+                            // DLC - Crown of the Old Iron King
+                            CustomTriggerChoice { value: "124".to_string(), label: "Fume Knight".to_string(), group: Some("DLC - Old Iron King".to_string()) },
+                            CustomTriggerChoice { value: "140".to_string(), label: "Sir Alonne".to_string(), group: Some("DLC - Old Iron King".to_string()) },
+                            CustomTriggerChoice { value: "144".to_string(), label: "Blue Smelter Demon".to_string(), group: Some("DLC - Old Iron King".to_string()) },
+                            // DLC - Crown of the Ivory King
+                            CustomTriggerChoice { value: "148".to_string(), label: "Aava, the King's Pet".to_string(), group: Some("DLC - Ivory King".to_string()) },
+                            CustomTriggerChoice { value: "156".to_string(), label: "Burnt Ivory King".to_string(), group: Some("DLC - Ivory King".to_string()) },
+                            CustomTriggerChoice { value: "160".to_string(), label: "Lud and Zallen, the King's Pets".to_string(), group: Some("DLC - Ivory King".to_string()) },
+                        ]),
+                        default_value: Some("0".to_string()),
+                        required: true,
+                    },
+                    CustomTriggerParam {
+                        id: "comparison".to_string(),
+                        name: "Comparison".to_string(),
+                        param_type: CustomTriggerParamType::Comparison,
+                        choices: None,
+                        default_value: Some(">=".to_string()),
+                        required: true,
+                    },
+                    CustomTriggerParam {
+                        id: "count".to_string(),
+                        name: "Kill Count".to_string(),
+                        param_type: CustomTriggerParamType::Int,
+                        choices: None,
+                        default_value: Some("1".to_string()),
+                        required: true,
+                    },
+                ],
+            },
+        ]
+    }
+
+    fn evaluate_custom_trigger(&self, trigger_id: &str, params: &HashMap<String, String>) -> bool {
+        match trigger_id {
+            "kill_counter" => {
+                let boss_offset: u32 = params.get("boss")
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(0);
+                let comparison = params.get("comparison")
+                    .map(|s| s.as_str())
+                    .unwrap_or(">=");
+                let target_count: i32 = params.get("count")
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(1);
+
+                let current_count = self.get_boss_kill_count_raw(boss_offset).unwrap_or(0);
+
+                match comparison {
+                    ">=" => current_count >= target_count,
+                    ">" => current_count > target_count,
+                    "==" | "=" => current_count == target_count,
+                    "<=" => current_count <= target_count,
+                    "<" => current_count < target_count,
+                    "!=" => current_count != target_count,
+                    _ => current_count >= target_count,
+                }
+            }
+            _ => false,
+        }
     }
 }
 
