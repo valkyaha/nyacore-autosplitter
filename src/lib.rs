@@ -26,6 +26,7 @@
 //! ```
 
 pub mod core;
+pub mod engines;
 pub mod games;
 pub mod memory;
 pub mod readers;
@@ -53,6 +54,11 @@ pub use crate::triggers::{
     AutosplitConfig, AutosplitTrigger, TriggerLogic,
     TriggerCondition, ComparisonOp, Position3D, TriggerEvaluator,
 };
+pub use crate::engines::{Engine, EngineContext, EngineType, EngineValue, BoxedEngine};
+pub use crate::engines::algorithm::AlgorithmEngine;
+#[cfg(feature = "rhai-scripting")]
+pub use crate::engines::rhai_engine::RhaiEngine;
+pub use crate::engines::asl::AslEngine;
 
 /// Error types for the autosplitter
 #[derive(Debug, thiserror::Error)]
@@ -83,6 +89,9 @@ pub enum AutosplitterError {
 
     #[error("Configuration error: {0}")]
     ConfigError(String),
+
+    #[error("Script error: {0}")]
+    ScriptError(String),
 
     #[error("Platform not supported: {0}")]
     PlatformNotSupported(String),

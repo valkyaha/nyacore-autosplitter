@@ -41,11 +41,39 @@ pub struct AutosplitterConfig {
     pub autosplitter: AutosplitterSettings,
 }
 
+/// Engine type for autosplitter
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EngineTypeConfig {
+    /// Built-in algorithm engine (default)
+    #[default]
+    Algorithm,
+    /// Rhai scripting engine
+    Rhai,
+    /// LiveSplit ASL script engine
+    Asl,
+}
+
 /// Main autosplitter settings
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AutosplitterSettings {
     pub enabled: bool,
+
+    /// Engine type to use (algorithm, rhai, or asl)
+    #[serde(default)]
+    pub engine: EngineTypeConfig,
+
+    /// Algorithm type (only used when engine = algorithm)
+    #[serde(default)]
     pub algorithm: FlagAlgorithm,
+
+    /// Path to Rhai script file (relative to plugin dir, only when engine = rhai)
+    #[serde(default)]
+    pub script_path: Option<String>,
+
+    /// Path to ASL script file (relative to plugin dir, only when engine = asl)
+    #[serde(default)]
+    pub asl_path: Option<String>,
 
     /// Category decomposition config (DS3/Sekiro style)
     #[serde(default)]
@@ -117,6 +145,8 @@ pub struct CategoryConfig {
     pub entry_size: i64,           // 0x18 for DS3
     #[serde(default = "default_category_multiplier")]
     pub category_multiplier: i64,  // 0xa8 for DS3
+    #[serde(default = "default_category_count")]
+    pub category_count: i64,       // Number of categories
 
     // Field area offsets
     #[serde(default)]
@@ -132,6 +162,7 @@ pub struct CategoryConfig {
 fn default_base_offset() -> i64 { 0x218 }
 fn default_entry_size() -> i64 { 0x18 }
 fn default_category_multiplier() -> i64 { 0xa8 }
+fn default_category_count() -> i64 { 10 }
 fn default_world_info_offset() -> i64 { 0x10 }
 fn default_world_info_struct_size() -> i64 { 0x38 }
 fn default_world_block_struct_size() -> i64 { 0x70 }

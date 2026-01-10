@@ -4,12 +4,13 @@ version = "0.1.0"
 edition = "2021"
 authors = ["HitCounter Contributors"]
 license = "MIT OR Apache-2.0"
-description = "Memory-based autosplitter for FromSoftware games"
+description = "Generic memory-based autosplitter engine with support for algorithms, Rhai scripting, and LiveSplit ASL"
 repository = "https://github.com/valkyaha/nyacore-autosplitter"
 
 [features]
-default = []
+default = ["rhai-scripting"]
 vision = ["dep:image", "dep:imageproc"]
+rhai-scripting = ["dep:rhai"]
 
 [dependencies]
 # Core
@@ -18,6 +19,9 @@ thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8"
+
+# Scripting
+rhai = { version = "1.19", features = ["sync"], optional = true }
 
 # Async/threading
 parking_lot = "0.12"
