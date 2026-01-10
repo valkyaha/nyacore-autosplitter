@@ -56,31 +56,6 @@ impl GameRegistry {
         self.factories.insert(game_id, factory);
     }
 
-    /// Register built-in hardcoded games (fallback when configs unavailable)
-    /// DEPRECATED: Use register_from_plugins_dir() instead
-    #[deprecated(note = "Use register_from_plugins_dir() to load games from TOML configs")]
-    pub fn register_builtin(&mut self) {
-        use super::{
-            DarkSouls1Factory,
-            DarkSouls2Factory,
-            DarkSouls3Factory,
-            EldenRingFactory,
-            SekiroFactory,
-            ArmoredCore6Factory,
-        };
-
-        log::warn!("Using deprecated register_builtin() - prefer register_from_plugins_dir()");
-
-        self.register(Box::new(DarkSouls1Factory));
-        self.register(Box::new(DarkSouls2Factory));
-        self.register(Box::new(DarkSouls3Factory));
-        self.register(Box::new(EldenRingFactory));
-        self.register(Box::new(SekiroFactory));
-        self.register(Box::new(ArmoredCore6Factory));
-
-        log::info!("Registered {} built-in games", self.factories.len());
-    }
-
     /// Register games from a plugins directory (NYA-Core-Assets/plugins)
     ///
     /// Each subdirectory should contain plugin.toml and autosplitter.toml

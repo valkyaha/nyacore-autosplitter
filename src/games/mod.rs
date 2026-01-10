@@ -5,36 +5,22 @@
 //!
 //! # Adding a New Game
 //!
-//! See `common.rs` for the standardized pattern and template.
+//! Games are now defined via TOML configuration files in NYA-Core-Assets/plugins/.
+//! Each game folder should contain:
+//! - plugin.toml - Basic game info and process names
+//! - autosplitter.toml - Memory patterns and algorithm config
+//! - bosses.toml - Boss definitions with flag IDs
+//! - presets.toml - Speedrun presets/categories
 //!
-//! Quick steps:
-//! 1. Create `src/games/my_game.rs` following the template in `common.rs`
-//! 2. Add `pub mod my_game;` below
-//! 3. Add `pub use my_game::MyGameFactory;` to exports
-//! 4. Register in `registry.rs` `register_builtin()`
+//! The ConfigurableGame implementation reads these files and provides
+//! a fully data-driven game implementation.
 
 mod common;
 pub mod registry;
 pub mod config;
 pub mod configurable;
 
-// Game implementations (fallback for when configs aren't available)
-pub mod dark_souls_1;
-pub mod dark_souls_2;
-pub mod dark_souls_3;
-pub mod elden_ring;
-pub mod sekiro;
-pub mod armored_core_6;
-
 pub use registry::{GameFactory, GameRegistry};
-
-// Re-export game factories
-pub use dark_souls_1::DarkSouls1Factory;
-pub use dark_souls_2::DarkSouls2Factory;
-pub use dark_souls_3::DarkSouls3Factory;
-pub use elden_ring::EldenRingFactory;
-pub use sekiro::SekiroFactory;
-pub use armored_core_6::ArmoredCore6Factory;
 
 use crate::memory::ProcessContext;
 use crate::AutosplitterError;
