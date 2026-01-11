@@ -1,0 +1,187 @@
+# NYA Core Autosplitter - Game Data Schema
+# This is an example/template for defining game autosplitter data
+
+[game]
+id = "ds3"                                    # Unique identifier
+name = "Dark Souls III"                       # Display name
+short_name = "DS3"                            # Short display name
+process_names = ["DarkSoulsIII.exe"]          # Process names to detect
+
+[autosplitter]
+# Engine determines which reading algorithm to use:
+# - "ds1_ptde"     : Dark Souls 1 PTDE event flags
+# - "ds1_remaster" : Dark Souls Remastered event flags
+# - "ds2_sotfs"    : Dark Souls 2 SOTFS kill counters
+# - "ds3"          : Dark Souls 3 event flags
+# - "elden_ring"   : Elden Ring virtual memory flags
+# - "sekiro"       : Sekiro event flags
+# - "ac6"          : Armored Core 6 event flags
+engine = "ds3"
+
+# Memory patterns to scan for
+[[autosplitter.patterns]]
+name = "sprj_event_flag_man"
+pattern = "48 c7 05 ? ? ? ? 00 00 00 00 48 8b 7c 24 38 c7 46 54 ff ff ff ff 48 83 c4 20 5e c3"
+resolve = "rip_relative"  # How to resolve: "rip_relative", "absolute", "none"
+rip_offset = 3            # Offset to RIP-relative address in pattern
+
+[[autosplitter.patterns]]
+name = "field_area"
+pattern = "4c 8b 3d ? ? ? ? 8b 45 87 83 f8 ff 74 69 48 8d 4d 8f 48 89 4d 9f 89 45 8f 48 8d 55 8f 49 8b 4f 10"
+resolve = "rip_relative"
+rip_offset = 3
+
+[[autosplitter.patterns]]
+name = "game_data_man"
+pattern = "48 8b 0d ? ? ? ? 4c 8d 44 24 40 45 33 c9 48 8b d3 40 88"
+resolve = "rip_relative"
+rip_offset = 3
+
+# Pointer chains for accessing game data
+[autosplitter.pointers]
+# Event flags pointer (engine-specific usage)
+event_flags = { pattern = "sprj_event_flag_man", offsets = [] }
+
+# Field area for DS3-style area lookups
+field_area = { pattern = "field_area", offsets = [] }
+
+# In-game time
+igt = { pattern = "game_data_man", offsets = [0x10, 0xA4] }
+
+# Player position (optional)
+position = { pattern = "game_data_man", offsets = [0x10, 0x68, 0x68, 0x28] }
+
+# NG+ level (optional)
+ng_level = { pattern = "game_data_man", offsets = [0x10, 0x78] }
+
+# Character attributes base (optional)
+attributes = { pattern = "game_data_man", offsets = [0x10, 0x44] }
+
+# ============================================================================
+# BOSS DEFINITIONS
+# ============================================================================
+# flag_id meaning depends on engine:
+# - Event flag engines: actual event flag ID (e.g., 13000050)
+# - Kill counter engines: offset from boss counter base (e.g., 0, 4, 8)
+
+[[bosses]]
+id = "iudex_gundyr"
+name = "Iudex Gundyr"
+flag_id = 13000050
+is_dlc = false
+
+[[bosses]]
+id = "vordt"
+name = "Vordt of the Boreal Valley"
+flag_id = 13000800
+is_dlc = false
+
+[[bosses]]
+id = "curse_rotted_greatwood"
+name = "Curse-Rotted Greatwood"
+flag_id = 13100800
+is_dlc = false
+
+# ... more bosses
+
+# ============================================================================
+# PRESETS
+# ============================================================================
+
+[[presets]]
+id = "any-percent"
+name = "Any%"
+description = "Beat the game as fast as possible"
+bosses = [
+    "iudex_gundyr",
+    "vordt",
+    # ... boss IDs in order
+]
+
+[[presets]]
+id = "all-bosses"
+name = "All Bosses"
+description = "Defeat all bosses in the game"
+bosses = [
+    "iudex_gundyr",
+    "vordt",
+    "curse_rotted_greatwood",
+    # ... all boss IDs
+]
+
+# ============================================================================
+# CUSTOM FIELDS (Optional - for game-specific features)
+# ============================================================================
+# Custom fields allow games to have special features like:
+# - DS2: kill_count (kill a boss multiple times with ascetics)
+# - ER: map areas for position-based splits
+
+[custom_fields]
+
+# Example: DS2 kill count field
+# [custom_fields.kill_count]
+# type = "integer"
+# default = 1
+# min = 1
+# max = 99
+# description = "Number of times to kill this boss (for ascetic runs)"
+# applies_to = "boss"  # Can be "boss", "split", or "global"
+
+# Example: Elden Ring map area field
+# [custom_fields.map_area]
+# type = "select"
+# options = [
+#     { value = "limgrave", label = "Limgrave" },
+#     { value = "liurnia", label = "Liurnia" },
+# ]
+# description = "Map area for position-based triggers"
+# applies_to = "split"
+
+# ============================================================================
+# ATTRIBUTES (Optional - for stat-based triggers)
+# ============================================================================
+
+[[attributes]]
+id = "vigor"
+name = "Vigor"
+offset = 0x44
+
+[[attributes]]
+id = "attunement"
+name = "Attunement"
+offset = 0x48
+
+[[attributes]]
+id = "endurance"
+name = "Endurance"
+offset = 0x4C
+
+[[attributes]]
+id = "strength"
+name = "Strength"
+offset = 0x50
+
+[[attributes]]
+id = "dexterity"
+name = "Dexterity"
+offset = 0x54
+
+[[attributes]]
+id = "intelligence"
+name = "Intelligence"
+offset = 0x58
+
+[[attributes]]
+id = "faith"
+name = "Faith"
+offset = 0x5C
+
+[[attributes]]
+id = "luck"
+name = "Luck"
+offset = 0x60
+
+[[attributes]]
+id = "soul_level"
+name = "Soul Level"
+offset = 0x68

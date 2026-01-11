@@ -8,6 +8,8 @@
 //! - A dynamic library (cdylib) for FFI-based loading
 
 pub mod config;
+pub mod engine;
+pub mod game_data;
 pub mod games;
 pub mod memory;
 
