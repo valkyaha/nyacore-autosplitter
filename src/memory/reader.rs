@@ -85,6 +85,37 @@ pub fn read_i16(handle: HANDLE, address: usize) -> Option<i16> {
     Some(i16::from_le_bytes([bytes[0], bytes[1]]))
 }
 
+/// Read a u16 from process memory
+#[cfg(target_os = "windows")]
+pub fn read_u16(handle: HANDLE, address: usize) -> Option<u16> {
+    let bytes = read_bytes(handle, address, 2)?;
+    Some(u16::from_le_bytes([bytes[0], bytes[1]]))
+}
+
+/// Read an i8 from process memory
+#[cfg(target_os = "windows")]
+pub fn read_i8(handle: HANDLE, address: usize) -> Option<i8> {
+    let bytes = read_bytes(handle, address, 1)?;
+    Some(bytes[0] as i8)
+}
+
+/// Read an f64 from process memory
+#[cfg(target_os = "windows")]
+pub fn read_f64(handle: HANDLE, address: usize) -> Option<f64> {
+    let bytes = read_bytes(handle, address, 8)?;
+    Some(f64::from_le_bytes([
+        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+    ]))
+}
+
+/// Read a null-terminated string from process memory
+#[cfg(target_os = "windows")]
+pub fn read_string(handle: HANDLE, address: usize, max_len: usize) -> Option<String> {
+    let bytes = read_bytes(handle, address, max_len)?;
+    let null_pos = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    String::from_utf8(bytes[..null_pos].to_vec()).ok()
+}
+
 /// Read a pointer (usize) from process memory
 #[cfg(target_os = "windows")]
 pub fn read_ptr(handle: HANDLE, address: usize) -> Option<usize> {
@@ -272,6 +303,37 @@ pub fn read_f32(pid: i32, address: usize) -> Option<f32> {
 pub fn read_i16(pid: i32, address: usize) -> Option<i16> {
     let bytes = read_bytes(pid, address, 2)?;
     Some(i16::from_le_bytes([bytes[0], bytes[1]]))
+}
+
+/// Read a u16 from process memory (Linux)
+#[cfg(target_os = "linux")]
+pub fn read_u16(pid: i32, address: usize) -> Option<u16> {
+    let bytes = read_bytes(pid, address, 2)?;
+    Some(u16::from_le_bytes([bytes[0], bytes[1]]))
+}
+
+/// Read an i8 from process memory (Linux)
+#[cfg(target_os = "linux")]
+pub fn read_i8(pid: i32, address: usize) -> Option<i8> {
+    let bytes = read_bytes(pid, address, 1)?;
+    Some(bytes[0] as i8)
+}
+
+/// Read an f64 from process memory (Linux)
+#[cfg(target_os = "linux")]
+pub fn read_f64(pid: i32, address: usize) -> Option<f64> {
+    let bytes = read_bytes(pid, address, 8)?;
+    Some(f64::from_le_bytes([
+        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+    ]))
+}
+
+/// Read a null-terminated string from process memory (Linux)
+#[cfg(target_os = "linux")]
+pub fn read_string(pid: i32, address: usize, max_len: usize) -> Option<String> {
+    let bytes = read_bytes(pid, address, max_len)?;
+    let null_pos = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    String::from_utf8(bytes[..null_pos].to_vec()).ok()
 }
 
 /// Read a pointer (usize) from process memory (Linux)

@@ -7,6 +7,7 @@
 //! - A Rust library (rlib) for direct integration
 //! - A dynamic library (cdylib) for FFI-based loading
 
+pub mod asl;
 pub mod config;
 pub mod engine;
 pub mod game_data;
@@ -17,6 +18,7 @@ pub mod memory;
 pub mod vision;
 
 // Re-export commonly used types
+pub use asl::{parse_asl, AslRuntime, ParseError as AslParseError};
 pub use config::{AutosplitterState, BossFlag};
 pub use engine::GenericGame;
 pub use game_data::GameData;
