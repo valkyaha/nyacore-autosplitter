@@ -18,6 +18,8 @@ pub mod vision;
 
 // Re-export commonly used types
 pub use config::{AutosplitterState, BossFlag};
+pub use engine::GenericGame;
+pub use game_data::GameData;
 pub use games::{ArmoredCore6, DarkSouls1, DarkSouls2, DarkSouls3, EldenRing, Sekiro};
 pub use memory::{parse_pattern, scan_pattern, resolve_rip_relative};
 
@@ -106,6 +108,8 @@ enum GameState {
     EldenRing(EldenRing),
     Sekiro(Sekiro),
     ArmoredCore6(ArmoredCore6),
+    /// Generic game using data-driven configuration
+    Generic(GenericGame),
 }
 
 #[cfg(target_os = "windows")]
@@ -118,12 +122,14 @@ impl GameState {
             GameState::EldenRing(g) => g.read_event_flag(flag_id),
             GameState::Sekiro(g) => g.read_event_flag(flag_id),
             GameState::ArmoredCore6(g) => g.read_event_flag(flag_id),
+            GameState::Generic(g) => g.read_event_flag(flag_id),
         }
     }
 
     fn get_boss_kill_count(&self, flag_id: u32) -> u32 {
         match self {
             GameState::DarkSouls2(g) => g.get_boss_kill_count_raw(flag_id).max(0) as u32,
+            GameState::Generic(g) => g.get_kill_count(flag_id),
             _ => {
                 if self.read_event_flag(flag_id) {
                     1
@@ -142,10 +148,11 @@ impl GameState {
             GameState::EldenRing(g) => g.handle,
             GameState::Sekiro(g) => g.handle,
             GameState::ArmoredCore6(g) => g.handle,
+            GameState::Generic(g) => g.handle,
         }
     }
 
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         match self {
             GameState::DarkSouls1(_) => "Dark Souls Remastered",
             GameState::DarkSouls2(_) => "Dark Souls 2 SOTFS",
@@ -153,6 +160,7 @@ impl GameState {
             GameState::EldenRing(_) => "Elden Ring",
             GameState::Sekiro(_) => "Sekiro",
             GameState::ArmoredCore6(_) => "Armored Core 6",
+            GameState::Generic(g) => &g.game_data.game.name,
         }
     }
 }
@@ -338,6 +346,69 @@ impl Autosplitter {
     pub fn start(
         &self,
         _game_type: GameType,
+        _boss_flags: Vec<BossFlag>,
+    ) -> Result<(), String> {
+        Err("Linux support not yet implemented in standalone library".to_string())
+    }
+
+    /// Start autosplitter with data-driven game configuration
+    #[cfg(target_os = "windows")]
+    pub fn start_with_game_data(
+        &self,
+        game_data: GameData,
+        boss_flags: Vec<BossFlag>,
+    ) -> Result<(), String> {
+        if self.running.load(Ordering::SeqCst) {
+            return Err("Autosplitter already running".to_string());
+        }
+
+        if boss_flags.is_empty() {
+            return Err("No boss flags defined".to_string());
+        }
+
+        log::info!(
+            "Starting autosplitter for {} (engine: {}) with {} boss flags",
+            game_data.game.name,
+            game_data.autosplitter.engine,
+            boss_flags.len()
+        );
+
+        self.running.store(true, Ordering::SeqCst);
+
+        {
+            let mut state = self.state.lock().unwrap();
+            state.running = true;
+            state.process_attached = false;
+            state.game_id = game_data.game.id.clone();
+            state.process_id = None;
+            state.bosses_defeated.clear();
+            state.boss_kill_counts.clear();
+        }
+
+        let running = self.running.clone();
+        let state = self.state.clone();
+        let reset_requested = self.reset_requested.clone();
+        let process_names = game_data.game.process_names.clone();
+
+        thread::spawn(move || {
+            log::info!("Autosplitter thread started (generic engine)");
+            run_generic_autosplitter_loop(
+                running,
+                state,
+                reset_requested,
+                game_data,
+                process_names,
+                boss_flags,
+            );
+        });
+
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn start_with_game_data(
+        &self,
+        _game_data: GameData,
         _boss_flags: Vec<BossFlag>,
     ) -> Result<(), String> {
         Err("Linux support not yet implemented in standalone library".to_string())
@@ -537,6 +608,209 @@ fn run_autosplitter_loop(
 }
 
 // =============================================================================
+// Generic Game Loop (Windows) - Uses data-driven configuration
+// =============================================================================
+
+#[cfg(target_os = "windows")]
+fn run_generic_autosplitter_loop(
+    running: Arc<AtomicBool>,
+    state: Arc<Mutex<AutosplitterState>>,
+    reset_requested: Arc<AtomicBool>,
+    game_data: GameData,
+    process_names: Vec<String>,
+    boss_flags: Vec<BossFlag>,
+) {
+    let mut game_state: Option<GameState> = None;
+    let mut current_handle: Option<HANDLE> = None;
+    let mut checked_flags: HashMap<u32, bool> = HashMap::new();
+
+    while running.load(Ordering::SeqCst) {
+        // Check for reset
+        if reset_requested.swap(false, Ordering::SeqCst) {
+            log::info!("Autosplitter: Reset detected");
+            if let Some(ref game) = game_state {
+                checked_flags.clear();
+                for boss in &boss_flags {
+                    if game.read_event_flag(boss.flag_id) {
+                        checked_flags.insert(boss.flag_id, true);
+                    }
+                }
+            } else {
+                checked_flags.clear();
+            }
+            let mut s = state.lock().unwrap();
+            s.bosses_defeated.clear();
+            s.boss_kill_counts.clear();
+            s.triggers_matched.clear();
+        }
+
+        if let Some(ref game) = game_state {
+            // Check if process still running
+            if !memory::process::is_process_running(game.get_handle()) {
+                log::info!("{} process exited", game.name());
+                if let Some(handle) = current_handle.take() {
+                    unsafe {
+                        let _ = CloseHandle(handle);
+                    }
+                }
+                game_state = None;
+                checked_flags.clear();
+
+                let mut s = state.lock().unwrap();
+                s.process_attached = false;
+                s.process_id = None;
+                s.bosses_defeated.clear();
+                s.boss_kill_counts.clear();
+                thread::sleep(Duration::from_millis(1000));
+                continue;
+            }
+
+            // Check boss flags
+            for boss in &boss_flags {
+                let kill_count = game.get_boss_kill_count(boss.flag_id);
+
+                if kill_count > 0 {
+                    let mut s = state.lock().unwrap();
+
+                    let prev_count = s.boss_kill_counts.get(&boss.boss_id).copied().unwrap_or(0);
+                    if kill_count > prev_count {
+                        s.boss_kill_counts.insert(boss.boss_id.clone(), kill_count);
+                        log::info!(
+                            "Boss kill count updated: {} - count: {} -> {}",
+                            boss.boss_name,
+                            prev_count,
+                            kill_count
+                        );
+                    }
+
+                    if !s.bosses_defeated.contains(&boss.boss_id) {
+                        s.bosses_defeated.push(boss.boss_id.clone());
+                        checked_flags.insert(boss.flag_id, true);
+                        log::info!(
+                            "Boss defeated: {} (id={}, flag={})",
+                            boss.boss_name,
+                            boss.boss_id,
+                            boss.flag_id
+                        );
+                    }
+                }
+            }
+        } else {
+            // Try to connect
+            let process_name_refs: Vec<&str> = process_names.iter().map(|s| s.as_str()).collect();
+            if let Some((pid, name)) = memory::process::find_process_by_name(&process_name_refs) {
+                let handle = unsafe {
+                    match OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, false, pid) {
+                        Ok(h) => h,
+                        Err(_) => {
+                            thread::sleep(Duration::from_millis(2000));
+                            continue;
+                        }
+                    }
+                };
+
+                // Get module info
+                let mut base = 0usize;
+                let mut size = 0usize;
+                for attempt in 0..5 {
+                    if let Some((b, s)) = memory::process::get_module_base_and_size(pid) {
+                        base = b;
+                        size = s;
+                        break;
+                    }
+                    if attempt < 4 {
+                        thread::sleep(Duration::from_millis(500));
+                    }
+                }
+
+                if base == 0 {
+                    log::warn!("Failed to get module info for {}", name);
+                    unsafe {
+                        let _ = CloseHandle(handle);
+                    }
+                    thread::sleep(Duration::from_millis(2000));
+                    continue;
+                }
+
+                log::info!(
+                    "Found '{}' (PID: {}), base=0x{:X}, size=0x{:X}",
+                    name,
+                    pid,
+                    base,
+                    size
+                );
+
+                // Initialize generic game
+                match GenericGame::new(game_data.clone()) {
+                    Ok(mut game) => {
+                        if game.init(handle, base, size) {
+                            log::info!("Connected to {} (generic engine)", game.game_data.game.name);
+
+                            // Wait for save data to stabilize
+                            log::info!("Waiting for game save data to stabilize...");
+                            thread::sleep(Duration::from_millis(1500));
+
+                            // Pre-populate checked flags
+                            checked_flags.clear();
+                            let mut pre_populated = Vec::new();
+                            for boss in &boss_flags {
+                                if game.read_event_flag(boss.flag_id) {
+                                    checked_flags.insert(boss.flag_id, true);
+                                    pre_populated.push(boss.boss_name.clone());
+                                }
+                            }
+
+                            if !pre_populated.is_empty() {
+                                log::info!(
+                                    "Pre-populated {} already-defeated bosses",
+                                    pre_populated.len()
+                                );
+                            }
+
+                            game_state = Some(GameState::Generic(game));
+                            current_handle = Some(handle);
+
+                            let mut s = state.lock().unwrap();
+                            s.process_attached = true;
+                            s.process_id = Some(unsafe { GetProcessId(handle) });
+                        } else {
+                            log::error!("Failed to initialize generic game - patterns not found");
+                            unsafe {
+                                let _ = CloseHandle(handle);
+                            }
+                            thread::sleep(Duration::from_millis(2000));
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("Failed to create generic game: {}", e);
+                        unsafe {
+                            let _ = CloseHandle(handle);
+                        }
+                        thread::sleep(Duration::from_millis(2000));
+                    }
+                }
+            } else {
+                thread::sleep(Duration::from_millis(2000));
+            }
+        }
+
+        thread::sleep(Duration::from_millis(100));
+    }
+
+    // Cleanup
+    if let Some(handle) = current_handle {
+        unsafe {
+            let _ = CloseHandle(handle);
+        }
+    }
+
+    let mut s = state.lock().unwrap();
+    s.running = false;
+    s.process_attached = false;
+    s.process_id = None;
+}
+
+// =============================================================================
 // FFI Interface for Dynamic Loading
 // =============================================================================
 
@@ -704,5 +978,43 @@ pub extern "C" fn autosplitter_start_autodetect(
             Err(e) => CString::new(e).unwrap().into_raw(),
         },
         None => CString::new("No supported game detected from process names").unwrap().into_raw(),
+    }
+}
+
+/// Start autosplitter with data-driven game configuration
+/// game_data_toml: TOML string containing game definition
+/// boss_flags_json: JSON array of BossFlag objects
+/// Returns error message or null on success (caller must free error string)
+#[no_mangle]
+pub extern "C" fn autosplitter_start_with_game_data(
+    game_data_toml: *const c_char,
+    boss_flags_json: *const c_char,
+) -> *mut c_char {
+    if game_data_toml.is_null() || boss_flags_json.is_null() {
+        return CString::new("Null pointer passed").unwrap().into_raw();
+    }
+
+    let game_data_str = unsafe { std::ffi::CStr::from_ptr(game_data_toml).to_string_lossy() };
+    let boss_flags_str = unsafe { std::ffi::CStr::from_ptr(boss_flags_json).to_string_lossy() };
+
+    let game_data: GameData = match GameData::from_toml(&game_data_str) {
+        Ok(data) => data,
+        Err(e) => return CString::new(format!("Failed to parse game data TOML: {}", e)).unwrap().into_raw(),
+    };
+
+    let boss_flags: Vec<BossFlag> = match serde_json::from_str(&boss_flags_str) {
+        Ok(flags) => flags,
+        Err(e) => return CString::new(format!("Failed to parse boss flags: {}", e)).unwrap().into_raw(),
+    };
+
+    let guard = AUTOSPLITTER.lock().unwrap();
+    let autosplitter = match guard.as_ref() {
+        Some(a) => a,
+        None => return CString::new("Autosplitter not initialized").unwrap().into_raw(),
+    };
+
+    match autosplitter.start_with_game_data(game_data, boss_flags) {
+        Ok(()) => std::ptr::null_mut(),
+        Err(e) => CString::new(e).unwrap().into_raw(),
     }
 }

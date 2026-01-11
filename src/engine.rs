@@ -2,6 +2,9 @@
 //!
 //! This module provides a unified interface for reading game state
 //! using configurations loaded from TOML files.
+//!
+//! The algorithms are implemented in Rust (too complex for config),
+//! but the memory patterns and pointers come from TOML config.
 
 use crate::game_data::{GameData, PatternDefinition, PointerDefinition};
 use crate::memory::pointer::Pointer;
@@ -51,13 +54,6 @@ impl EngineType {
     pub fn uses_kill_counters(&self) -> bool {
         matches!(self, Self::Ds2Sotfs)
     }
-}
-
-/// Scanned pattern result
-#[derive(Debug, Clone)]
-pub struct ScannedPattern {
-    pub name: String,
-    pub address: usize,
 }
 
 /// Generic game instance that uses data-driven configuration
@@ -111,9 +107,9 @@ impl GenericGame {
         }
 
         // Build pointers from pattern results
-        for (name, pointer_def) in &self.game_data.autosplitter.pointers {
+        for (name, pointer_def) in &self.game_data.autosplitter.pointers.clone() {
             if let Some(pointer) = self.build_pointer(pointer_def) {
-                log::debug!("  Built pointer {}: {:?}", name, pointer.offsets);
+                log::debug!("  Built pointer {}: base=0x{:X}", name, pointer.base_address);
                 self.pointers.insert(name.clone(), pointer);
             }
         }
@@ -136,21 +132,16 @@ impl GenericGame {
         // Apply resolution
         let resolved = match pattern_def.resolve.as_str() {
             "rip_relative" => {
-                // RIP-relative addressing: the pattern contains a 4-byte offset
-                // that is relative to the end of the instruction
                 let offset_pos = pattern_def.rip_offset as usize;
-                // Standard x64 RIP-relative: offset is 4 bytes, instruction ends after it
                 let instruction_len = offset_pos + 4;
                 resolve_rip_relative(handle, found, offset_pos, instruction_len)?
             }
             "absolute" => {
-                // Read absolute address from pattern location
                 read_i64(handle, found + pattern_def.rip_offset as usize)? as usize
             }
             _ => found,
         };
 
-        // Apply extra offset
         Some((resolved as i64 + pattern_def.extra_offset) as usize)
     }
 
@@ -159,9 +150,12 @@ impl GenericGame {
         let base_addr = *self.patterns.get(&pointer_def.pattern)?;
 
         let mut pointer = Pointer::new();
-        pointer.base_address = base_addr as i64;
-        pointer.offsets = pointer_def.offsets.clone();
-        pointer.handle = self.handle;
+        pointer.initialize(
+            self.handle,
+            true,
+            base_addr as i64,
+            &pointer_def.offsets,
+        );
 
         Some(pointer)
     }
@@ -170,11 +164,16 @@ impl GenericGame {
     fn validate_patterns(&self) -> bool {
         match self.engine_type {
             EngineType::Ds2Sotfs => {
-                // DS2 needs boss_counters pointer
                 self.pointers.contains_key("boss_counters")
             }
+            EngineType::Ds3 => {
+                self.pointers.contains_key("event_flags")
+                    && self.pointers.contains_key("field_area")
+            }
+            EngineType::EldenRing => {
+                self.pointers.contains_key("event_flags")
+            }
             _ => {
-                // Event flag games need event_flags pointer
                 self.pointers.contains_key("event_flags")
             }
         }
@@ -196,135 +195,318 @@ impl GenericGame {
     /// Get raw kill count (for DS2)
     pub fn get_kill_count(&self, flag_id: u32) -> u32 {
         if self.engine_type == EngineType::Ds2Sotfs {
-            self.read_kill_counter(flag_id) as u32
+            self.read_kill_counter(flag_id).max(0) as u32
         } else {
             if self.read_event_flag(flag_id) { 1 } else { 0 }
         }
     }
 
     // =========================================================================
-    // Engine-specific implementations
+    // DS2 SOTFS - Kill Counter System
     // =========================================================================
 
-    /// DS2: Read kill counter at offset
     fn read_kill_counter(&self, offset: u32) -> i32 {
         let boss_counters = match self.pointers.get("boss_counters") {
             Some(p) => p,
             None => return 0,
         };
 
-        let addr = boss_counters.get_address();
-        if addr == 0 {
-            return 0;
-        }
-
-        read_i32(self.handle, (addr as usize) + (offset as usize)).unwrap_or(0)
+        boss_counters.read_i32(Some(offset as i64))
     }
 
-    /// DS3: Read event flag using area-based lookup
+    // =========================================================================
+    // DS3 - Area-based Event Flags (port from SoulSplitter)
+    // =========================================================================
+
     fn read_ds3_event_flag(&self, event_flag_id: u32) -> bool {
-        // Simplified DS3 event flag reading
-        // Full implementation would match dark_souls_3.rs
         let event_flags = match self.pointers.get("event_flags") {
             Some(p) => p,
             None => return false,
         };
 
-        let addr = event_flags.get_address();
-        if addr == 0 {
+        let field_area = match self.pointers.get("field_area") {
+            Some(p) => p,
+            None => return false,
+        };
+
+        // Decompose event flag ID
+        let event_flag_id_div_10000000 = ((event_flag_id / 10_000_000) % 10) as i64;
+        let event_flag_area = ((event_flag_id / 100_000) % 100) as i32;
+        let event_flag_id_div_10000 = ((event_flag_id / 10_000) % 10) as i32;
+        let event_flag_id_div_1000 = ((event_flag_id / 1_000) % 10) as i64;
+
+        let mut flag_world_block_info_category: i32 = -1;
+
+        if event_flag_area >= 90 || event_flag_area + event_flag_id_div_10000 == 0 {
+            flag_world_block_info_category = 0;
+        } else {
+            if field_area.is_null_ptr() {
+                return false;
+            }
+
+            let world_info_owner = field_area.append(&[0x0, 0x10]).create_pointer_from_address(None);
+            let size = world_info_owner.read_i32(Some(0x8));
+            let vector = world_info_owner.append(&[0x10]);
+
+            for i in 0..size {
+                let area = vector.read_byte(Some((i as i64 * 0x38) + 0xb)) as i32;
+
+                if area == event_flag_area {
+                    let count = vector.read_byte(Some(i as i64 * 0x38 + 0x20));
+                    let mut index = 0i64;
+                    let mut found = false;
+                    let mut world_info_block_vector: Option<Pointer> = None;
+
+                    if count >= 1 {
+                        loop {
+                            let block_vec = vector.create_pointer_from_address(Some(i as i64 * 0x38 + 0x28));
+                            let flag = block_vec.read_i32(Some((index * 0x70) + 0x8));
+
+                            if ((flag >> 0x10) & 0xff) == event_flag_id_div_10000
+                                && (flag >> 0x18) == event_flag_area
+                            {
+                                found = true;
+                                world_info_block_vector = Some(block_vec);
+                                break;
+                            }
+
+                            index += 1;
+                            if count as i64 <= index {
+                                break;
+                            }
+                        }
+                    }
+
+                    if found {
+                        if let Some(ref block_vec) = world_info_block_vector {
+                            flag_world_block_info_category = block_vec.read_i32(Some((index * 0x70) + 0x20));
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if flag_world_block_info_category >= 0 {
+                flag_world_block_info_category += 1;
+            }
+        }
+
+        let ptr = event_flags.append(&[0x218, event_flag_id_div_10000000 * 0x18, 0x0]);
+
+        if ptr.is_null_ptr() || flag_world_block_info_category < 0 {
             return false;
         }
 
-        // DS3 event flag algorithm (simplified)
-        // The full algorithm is in games/dark_souls_3.rs
-        self.read_generic_event_flag(addr, event_flag_id)
+        let result_base = (event_flag_id_div_1000 << 4)
+            + ptr.get_address()
+            + (flag_world_block_info_category as i64 * 0xa8);
+
+        let mut result_pointer = Pointer::new();
+        result_pointer.initialize(self.handle, true, result_base, &[0x0]);
+
+        if !result_pointer.is_null_ptr() {
+            let mod_1000 = (event_flag_id % 1000) as u32;
+            let read_offset = ((mod_1000 >> 5) * 4) as i64;
+            let value = result_pointer.read_u32(Some(read_offset));
+
+            let bit_shift = 0x1f - ((mod_1000 as u8) & 0x1f);
+            let mask = 1u32 << (bit_shift & 0x1f);
+
+            return (value & mask) != 0;
+        }
+
+        false
     }
 
-    /// Elden Ring: Read virtual memory flag
+    // =========================================================================
+    // Elden Ring - Virtual Memory Flags (port from SoulSplitter)
+    // =========================================================================
+
     fn read_elden_ring_event_flag(&self, event_flag_id: u32) -> bool {
         let event_flags = match self.pointers.get("event_flags") {
             Some(p) => p,
             None => return false,
         };
 
-        let addr = event_flags.get_address();
-        if addr == 0 {
+        // Read divisor from virtual_memory_flag + 0x1c
+        let divisor = event_flags.read_i32(Some(0x1c));
+        if divisor == 0 {
             return false;
         }
 
-        // Elden Ring uses virtual memory flags with a divisor
-        // Full implementation in games/elden_ring.rs
-        self.read_generic_event_flag(addr, event_flag_id)
+        let category = event_flag_id / divisor as u32;
+        let least_significant_digits = event_flag_id - (category * divisor as u32);
+
+        // Binary tree traversal
+        let current_element_root = event_flags.create_pointer_from_address(Some(0x38));
+        let mut current_element = current_element_root.clone();
+        let mut current_sub_element = current_element.create_pointer_from_address(Some(0x8));
+
+        while current_sub_element.read_byte(Some(0x19)) == 0 {
+            if (current_sub_element.read_i32(Some(0x20)) as u32) < category {
+                current_sub_element = current_sub_element.create_pointer_from_address(Some(0x10));
+            } else {
+                current_element = current_sub_element.clone();
+                current_sub_element = current_sub_element.create_pointer_from_address(Some(0x0));
+            }
+        }
+
+        let current_elem_addr = current_element.get_address();
+        let sub_elem_addr = current_sub_element.get_address();
+
+        if current_elem_addr == sub_elem_addr || category < (current_element.read_i32(Some(0x20)) as u32) {
+            current_element = current_sub_element.clone();
+        }
+
+        let current_elem_addr = current_element.get_address();
+        let sub_elem_addr = current_sub_element.get_address();
+
+        if current_elem_addr == sub_elem_addr {
+            return false;
+        }
+
+        let mystery_value = read_i32(self.handle, (current_elem_addr + 0x28) as usize).unwrap_or(0) - 1;
+
+        let calculated_pointer: i64;
+        if mystery_value == 0 {
+            let mult = event_flags.read_i32(Some(0x20));
+            let elem_val = read_i32(self.handle, (current_elem_addr + 0x30) as usize).unwrap_or(0);
+            let base_addr = event_flags.read_i64(Some(0x28));
+            calculated_pointer = (mult as i64 * elem_val as i64) + base_addr;
+        } else if mystery_value == 1 {
+            return false;
+        } else {
+            calculated_pointer = read_i64(self.handle, (current_elem_addr + 0x30) as usize).unwrap_or(0);
+        }
+
+        if calculated_pointer == 0 {
+            return false;
+        }
+
+        let thing = 7 - (least_significant_digits & 7);
+        let mask = 1i32 << thing;
+        let shifted = least_significant_digits >> 3;
+
+        let final_addr = (calculated_pointer + shifted as i64) as usize;
+        if let Some(read_value) = read_i32(self.handle, final_addr) {
+            return (read_value & mask) != 0;
+        }
+
+        false
     }
 
-    /// Sekiro: Read event flag
+    // =========================================================================
+    // Sekiro - Event Flags (similar to DS3 but simpler)
+    // =========================================================================
+
     fn read_sekiro_event_flag(&self, event_flag_id: u32) -> bool {
         let event_flags = match self.pointers.get("event_flags") {
             Some(p) => p,
             None => return false,
         };
 
-        let addr = event_flags.get_address();
-        if addr == 0 {
+        // Sekiro uses a simpler system similar to DS3 category 0
+        let divisor = 1000u32;
+        let id_div_by_divisor = event_flag_id / divisor;
+        let category = id_div_by_divisor / 100000;
+        let sub_category = (id_div_by_divisor % 100000) / 10000;
+        let byte_index = id_div_by_divisor % 10000;
+
+        // Navigate to the flag location
+        let ptr = event_flags.append(&[
+            0x28,                           // Base offset
+            (category * 8) as i64,          // Category offset
+            0x0,                            // Dereference
+            (sub_category * 0x90) as i64,   // Sub-category offset
+            0x80,                           // Fixed offset
+            (byte_index * 8) as i64,        // Byte index offset
+        ]);
+
+        if ptr.is_null_ptr() {
             return false;
         }
 
-        self.read_generic_event_flag(addr, event_flag_id)
+        let mod_1000 = event_flag_id % 1000;
+        let byte_offset = (mod_1000 / 8) as i64;
+        let bit_index = mod_1000 % 8;
+
+        let byte_val = ptr.read_byte(Some(byte_offset));
+        let mask = 1u8 << bit_index;
+
+        (byte_val & mask) != 0
     }
 
-    /// DS1 Remastered: Read event flag
+    // =========================================================================
+    // DS1 Remastered - Event Flags
+    // =========================================================================
+
     fn read_ds1r_event_flag(&self, event_flag_id: u32) -> bool {
         let event_flags = match self.pointers.get("event_flags") {
             Some(p) => p,
             None => return false,
         };
 
-        let addr = event_flags.get_address();
-        if addr == 0 {
+        // DS1R event flag calculation
+        let id_div_100000 = (event_flag_id / 100000) as i64;
+        let id_mod_100000 = event_flag_id % 100000;
+        let _id_div_100000_mod_10 = id_div_100000 % 10;
+
+        let offset_base = match id_div_100000 {
+            0 => 0x0,
+            1 => 0x500,
+            5 => 0x5F00,
+            6 => 0x6900,
+            7 => 0x7300,
+            _ => {
+                // Calculate based on area
+                let area_offset = if id_div_100000 < 50 {
+                    (id_div_100000 - 10) * 0x500 + 0xA00
+                } else {
+                    (id_div_100000 - 50) * 0x100 + 0x7D00
+                };
+                area_offset
+            }
+        };
+
+        let id_div_10000_mod_10 = (id_mod_100000 / 10000) % 10;
+        let sub_offset = (id_div_10000_mod_10 as i64) * 0x80;
+
+        let final_offset = offset_base + sub_offset + ((id_mod_100000 % 10000) / 32) as i64 * 4;
+
+        let ptr = event_flags.append(&[final_offset]);
+        if ptr.is_null_ptr() {
             return false;
         }
 
-        self.read_generic_event_flag(addr, event_flag_id)
+        let value = ptr.read_u32(None);
+        let bit = (id_mod_100000 % 32) as u32;
+        let mask = 1u32 << bit;
+
+        (value & mask) != 0
     }
 
-    /// DS1 PTDE: Read event flag
+    // =========================================================================
+    // DS1 PTDE - Event Flags (32-bit)
+    // =========================================================================
+
     fn read_ds1_ptde_event_flag(&self, event_flag_id: u32) -> bool {
-        let event_flags = match self.pointers.get("event_flags") {
-            Some(p) => p,
-            None => return false,
-        };
-
-        let addr = event_flags.get_address();
-        if addr == 0 {
-            return false;
-        }
-
-        self.read_generic_event_flag(addr, event_flag_id)
+        // PTDE uses same algorithm as Remastered but 32-bit pointers
+        self.read_ds1r_event_flag(event_flag_id)
     }
 
-    /// AC6: Read event flag
+    // =========================================================================
+    // AC6 - Event Flags (similar to Elden Ring)
+    // =========================================================================
+
     fn read_ac6_event_flag(&self, event_flag_id: u32) -> bool {
-        let event_flags = match self.pointers.get("event_flags") {
-            Some(p) => p,
-            None => return false,
-        };
-
-        let addr = event_flags.get_address();
-        if addr == 0 {
-            return false;
-        }
-
-        self.read_generic_event_flag(addr, event_flag_id)
-    }
-
-    /// Generic event flag reading (fallback)
-    /// Note: This is a simplified version. Full implementations are in games/*.rs
-    fn read_generic_event_flag(&self, _base_addr: i64, _event_flag_id: u32) -> bool {
-        // TODO: Implement based on engine type
-        // For now, delegate to the existing game implementations
-        false
+        // AC6 uses the same virtual memory flag system as Elden Ring
+        self.read_elden_ring_event_flag(event_flag_id)
     }
 }
+
+// =========================================================================
+// Linux Implementation (stub)
+// =========================================================================
 
 #[cfg(target_os = "linux")]
 pub struct GenericGame {
@@ -350,9 +532,8 @@ impl GenericGame {
         })
     }
 
-    pub fn init(&mut self, pid: i32, base: usize, size: usize) -> bool {
+    pub fn init(&mut self, pid: i32, _base: usize, _size: usize) -> bool {
         self.pid = pid;
-        // Linux implementation would go here
         false
     }
 

@@ -1,0 +1,322 @@
+# Dark Souls III - Game Data
+# Complete boss definitions and autosplitter configuration
+
+[game]
+id = "ds3"
+name = "Dark Souls III"
+short_name = "DS3"
+process_names = ["DarkSoulsIII.exe"]
+
+[autosplitter]
+engine = "ds3"
+
+# Memory patterns from SoulSplitter
+[[autosplitter.patterns]]
+name = "sprj_event_flag_man"
+pattern = "48 c7 05 ? ? ? ? 00 00 00 00 48 8b 7c 24 38 c7 46 54 ff ff ff ff 48 83 c4 20 5e c3"
+resolve = "rip_relative"
+rip_offset = 3
+extra_offset = 0
+
+[[autosplitter.patterns]]
+name = "field_area"
+pattern = "4c 8b 3d ? ? ? ? 8b 45 87 83 f8 ff 74 69 48 8d 4d 8f 48 89 4d 9f 89 45 8f 48 8d 55 8f 49 8b 4f 10"
+resolve = "rip_relative"
+rip_offset = 3
+extra_offset = 0
+
+[[autosplitter.patterns]]
+name = "game_data_man"
+pattern = "48 8b 0d ? ? ? ? 4c 8d 44 24 40 45 33 c9 48 8b d3 40 88"
+resolve = "rip_relative"
+rip_offset = 3
+extra_offset = 0
+
+[autosplitter.pointers]
+event_flags = { pattern = "sprj_event_flag_man", offsets = [0] }
+field_area = { pattern = "field_area", offsets = [] }
+igt = { pattern = "game_data_man", offsets = [0, 164] }
+
+# ============================================================================
+# BOSSES - flag_id is the event flag ID
+# ============================================================================
+
+# Cemetery of Ash / Firelink
+[[bosses]]
+id = "iudex_gundyr"
+name = "Iudex Gundyr"
+flag_id = 13000800
+is_dlc = false
+
+[[bosses]]
+id = "champion_gundyr"
+name = "Champion Gundyr"
+flag_id = 13000830
+is_dlc = false
+
+# High Wall of Lothric
+[[bosses]]
+id = "vordt"
+name = "Vordt of the Boreal Valley"
+flag_id = 13100800
+is_dlc = false
+
+[[bosses]]
+id = "dancer"
+name = "Dancer of the Boreal Valley"
+flag_id = 13100850
+is_dlc = false
+
+# Undead Settlement
+[[bosses]]
+id = "curse_rotted_greatwood"
+name = "Curse-Rotted Greatwood"
+flag_id = 13010800
+is_dlc = false
+
+# Road of Sacrifices
+[[bosses]]
+id = "crystal_sage"
+name = "Crystal Sage"
+flag_id = 13200800
+is_dlc = false
+
+# Cathedral of the Deep
+[[bosses]]
+id = "deacons"
+name = "Deacons of the Deep"
+flag_id = 13300800
+is_dlc = false
+
+# Farron Keep
+[[bosses]]
+id = "abyss_watchers"
+name = "Abyss Watchers"
+flag_id = 13800800
+is_dlc = false
+
+# Catacombs of Carthus
+[[bosses]]
+id = "high_lord_wolnir"
+name = "High Lord Wolnir"
+flag_id = 13900800
+is_dlc = false
+
+# Smouldering Lake
+[[bosses]]
+id = "old_demon_king"
+name = "Old Demon King"
+flag_id = 14000800
+is_dlc = false
+
+# Irithyll of the Boreal Valley
+[[bosses]]
+id = "pontiff_sulyvahn"
+name = "Pontiff Sulyvahn"
+flag_id = 13500800
+is_dlc = false
+
+# Anor Londo
+[[bosses]]
+id = "aldrich"
+name = "Aldrich, Devourer of Gods"
+flag_id = 13700850
+is_dlc = false
+
+# Irithyll Dungeon / Profaned Capital
+[[bosses]]
+id = "yhorm"
+name = "Yhorm the Giant"
+flag_id = 13700800
+is_dlc = false
+
+# Lothric Castle
+[[bosses]]
+id = "dragonslayer_armour"
+name = "Dragonslayer Armour"
+flag_id = 14100800
+is_dlc = false
+
+# Consumed King's Garden
+[[bosses]]
+id = "oceiros"
+name = "Oceiros, the Consumed King"
+flag_id = 14110800
+is_dlc = false
+
+# Grand Archives
+[[bosses]]
+id = "twin_princes"
+name = "Lothric, Younger Prince"
+flag_id = 14500800
+is_dlc = false
+
+# Archdragon Peak
+[[bosses]]
+id = "king_of_the_storm"
+name = "King of the Storm"
+flag_id = 15000850
+is_dlc = false
+
+[[bosses]]
+id = "nameless_king"
+name = "Nameless King"
+flag_id = 15000800
+is_dlc = false
+
+# Kiln of the First Flame
+[[bosses]]
+id = "soul_of_cinder"
+name = "Soul of Cinder"
+flag_id = 15100800
+is_dlc = false
+
+# DLC - Ashes of Ariandel
+[[bosses]]
+id = "champions_gravetender"
+name = "Champion's Gravetender"
+flag_id = 15010850
+is_dlc = true
+
+[[bosses]]
+id = "sister_friede"
+name = "Sister Friede"
+flag_id = 15110800
+is_dlc = true
+
+# DLC - The Ringed City
+[[bosses]]
+id = "demon_prince"
+name = "Demon Prince"
+flag_id = 15100850
+is_dlc = true
+
+[[bosses]]
+id = "halflight"
+name = "Halflight, Spear of the Church"
+flag_id = 15110850
+is_dlc = true
+
+[[bosses]]
+id = "darkeater_midir"
+name = "Darkeater Midir"
+flag_id = 15110851
+is_dlc = true
+
+[[bosses]]
+id = "slave_knight_gael"
+name = "Slave Knight Gael"
+flag_id = 15200800
+is_dlc = true
+
+# ============================================================================
+# PRESETS
+# ============================================================================
+
+[[presets]]
+id = "any-percent"
+name = "Any%"
+description = "Beat the game as fast as possible"
+bosses = [
+    "iudex_gundyr",
+    "vordt",
+    "curse_rotted_greatwood",
+    "crystal_sage",
+    "deacons",
+    "abyss_watchers",
+    "high_lord_wolnir",
+    "pontiff_sulyvahn",
+    "yhorm",
+    "aldrich",
+    "dancer",
+    "dragonslayer_armour",
+    "twin_princes",
+    "soul_of_cinder"
+]
+
+[[presets]]
+id = "all-bosses"
+name = "All Bosses"
+description = "Defeat every boss including optional and DLC"
+bosses = [
+    "iudex_gundyr",
+    "vordt",
+    "curse_rotted_greatwood",
+    "crystal_sage",
+    "deacons",
+    "abyss_watchers",
+    "high_lord_wolnir",
+    "old_demon_king",
+    "pontiff_sulyvahn",
+    "yhorm",
+    "aldrich",
+    "dancer",
+    "oceiros",
+    "champion_gundyr",
+    "dragonslayer_armour",
+    "twin_princes",
+    "king_of_the_storm",
+    "nameless_king",
+    "soul_of_cinder",
+    # DLC
+    "champions_gravetender",
+    "sister_friede",
+    "demon_prince",
+    "halflight",
+    "darkeater_midir",
+    "slave_knight_gael"
+]
+
+# ============================================================================
+# ATTRIBUTES
+# ============================================================================
+
+[[attributes]]
+id = "vigor"
+name = "Vigor"
+offset = 68
+
+[[attributes]]
+id = "attunement"
+name = "Attunement"
+offset = 72
+
+[[attributes]]
+id = "endurance"
+name = "Endurance"
+offset = 76
+
+[[attributes]]
+id = "vitality"
+name = "Vitality"
+offset = 108
+
+[[attributes]]
+id = "strength"
+name = "Strength"
+offset = 80
+
+[[attributes]]
+id = "dexterity"
+name = "Dexterity"
+offset = 84
+
+[[attributes]]
+id = "intelligence"
+name = "Intelligence"
+offset = 88
+
+[[attributes]]
+id = "faith"
+name = "Faith"
+offset = 92
+
+[[attributes]]
+id = "luck"
+name = "Luck"
+offset = 96
+
+[[attributes]]
+id = "soul_level"
+name = "Soul Level"
+offset = 104

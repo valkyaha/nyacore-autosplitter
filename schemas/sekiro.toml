@@ -1,0 +1,201 @@
+# Sekiro: Shadows Die Twice - Game Data
+# Complete boss definitions and autosplitter configuration
+
+[game]
+id = "sekiro"
+name = "Sekiro: Shadows Die Twice"
+short_name = "Sekiro"
+process_names = ["sekiro.exe"]
+
+[autosplitter]
+engine = "sekiro"
+
+# Memory patterns
+[[autosplitter.patterns]]
+name = "event_flag_man"
+pattern = "48 8b 0d ? ? ? ? 48 89 5c 24 50 48 89 6c 24 58 48 89 74 24 60"
+resolve = "rip_relative"
+rip_offset = 3
+extra_offset = 0
+
+[[autosplitter.patterns]]
+name = "field_area"
+pattern = "48 8b 0d ? ? ? ? 48 85 c9 74 26 44 8b 41 28 48 8d 54 24 40"
+resolve = "rip_relative"
+rip_offset = 3
+extra_offset = 0
+
+[[autosplitter.patterns]]
+name = "game_data_man"
+pattern = "48 8b 05 ? ? ? ? 48 85 c0 74 05 48 8b 40 58 c3 c3"
+resolve = "rip_relative"
+rip_offset = 3
+extra_offset = 0
+
+[autosplitter.pointers]
+event_flags = { pattern = "event_flag_man", offsets = [0] }
+field_area = { pattern = "field_area", offsets = [] }
+igt = { pattern = "game_data_man", offsets = [0, 160] }
+
+# ============================================================================
+# BOSSES - Sekiro uses internal counter IDs
+# ============================================================================
+
+[[bosses]]
+id = "gyoubu"
+name = "Gyoubu Masataka Oniwa"
+flag_id = 9301
+is_dlc = false
+
+[[bosses]]
+id = "lady_butterfly"
+name = "Lady Butterfly"
+flag_id = 9302
+is_dlc = false
+
+[[bosses]]
+id = "genichiro"
+name = "Genichiro Ashina"
+flag_id = 9303
+is_dlc = false
+
+[[bosses]]
+id = "guardian_ape"
+name = "Guardian Ape"
+flag_id = 9304
+is_dlc = false
+
+[[bosses]]
+id = "folding_screen_monkeys"
+name = "Folding Screen Monkeys"
+flag_id = 9305
+is_dlc = false
+
+[[bosses]]
+id = "corrupted_monk_illusion"
+name = "Corrupted Monk (Illusion)"
+flag_id = 9306
+is_dlc = false
+
+[[bosses]]
+id = "headless_ape"
+name = "Headless Ape"
+flag_id = 9307
+is_dlc = false
+
+[[bosses]]
+id = "great_shinobi_owl"
+name = "Great Shinobi Owl"
+flag_id = 9308
+is_dlc = false
+
+[[bosses]]
+id = "true_corrupted_monk"
+name = "True Corrupted Monk"
+flag_id = 9309
+is_dlc = false
+
+[[bosses]]
+id = "divine_dragon"
+name = "Divine Dragon"
+flag_id = 9310
+is_dlc = false
+
+[[bosses]]
+id = "isshin_sword_saint"
+name = "Isshin, the Sword Saint"
+flag_id = 9312
+is_dlc = false
+
+[[bosses]]
+id = "demon_of_hatred"
+name = "Demon of Hatred"
+flag_id = 9313
+is_dlc = false
+
+[[bosses]]
+id = "emma"
+name = "Emma, the Gentle Blade"
+flag_id = 9315
+is_dlc = false
+
+[[bosses]]
+id = "isshin_ashina"
+name = "Isshin Ashina"
+flag_id = 9316
+is_dlc = false
+
+[[bosses]]
+id = "owl_father"
+name = "Owl (Father)"
+flag_id = 9317
+is_dlc = false
+
+# ============================================================================
+# PRESETS
+# ============================================================================
+
+[[presets]]
+id = "any-percent"
+name = "Any% Immortal Severance"
+description = "Defeat Isshin, the Sword Saint"
+bosses = [
+    "gyoubu",
+    "genichiro",
+    "guardian_ape",
+    "headless_ape",
+    "true_corrupted_monk",
+    "divine_dragon",
+    "isshin_sword_saint"
+]
+
+[[presets]]
+id = "all-bosses"
+name = "All Bosses"
+description = "Defeat all bosses including optional"
+bosses = [
+    "gyoubu",
+    "lady_butterfly",
+    "genichiro",
+    "guardian_ape",
+    "folding_screen_monkeys",
+    "corrupted_monk_illusion",
+    "headless_ape",
+    "great_shinobi_owl",
+    "true_corrupted_monk",
+    "divine_dragon",
+    "demon_of_hatred",
+    "owl_father",
+    "isshin_sword_saint"
+]
+
+[[presets]]
+id = "shura"
+name = "Shura Ending"
+description = "Side with Owl and defeat Emma/Isshin Ashina"
+bosses = [
+    "gyoubu",
+    "genichiro",
+    "guardian_ape",
+    "emma",
+    "isshin_ashina"
+]
+
+# ============================================================================
+# ATTRIBUTES (if applicable)
+# ============================================================================
+
+[[attributes]]
+id = "attack_power"
+name = "Attack Power"
+offset = 0
+
+[[attributes]]
+id = "vitality"
+name = "Vitality"
+offset = 4
+
+[[attributes]]
+id = "posture"
+name = "Posture"
+offset = 8

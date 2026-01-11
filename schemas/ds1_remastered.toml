@@ -1,0 +1,294 @@
+# Dark Souls Remastered - Game Data
+# Complete boss definitions and autosplitter configuration
+
+[game]
+id = "ds1r"
+name = "Dark Souls Remastered"
+short_name = "DS1R"
+process_names = ["DarkSoulsRemastered.exe"]
+
+[autosplitter]
+engine = "ds1_remaster"
+
+# Memory patterns
+[[autosplitter.patterns]]
+name = "event_flags"
+pattern = "48 8B 0D ? ? ? ? 99 33 C2 45 33 C0 2B C2 8D 50 F6"
+resolve = "rip_relative"
+rip_offset = 3
+extra_offset = 0
+
+[[autosplitter.patterns]]
+name = "game_data_man"
+pattern = "48 8b 05 ? ? ? ? 45 33 ed 48 8b f1 48 85 c0"
+resolve = "rip_relative"
+rip_offset = 3
+extra_offset = 0
+
+[autosplitter.pointers]
+event_flags = { pattern = "event_flags", offsets = [0] }
+igt = { pattern = "game_data_man", offsets = [0, 160] }
+
+# ============================================================================
+# BOSSES - DS1R uses 8-digit event flag IDs and simple flags
+# ============================================================================
+
+# Simple flag IDs (boss completion)
+[[bosses]]
+id = "gaping_dragon"
+name = "Gaping Dragon"
+flag_id = 2
+is_dlc = false
+
+[[bosses]]
+id = "bell_gargoyle"
+name = "Bell Gargoyle"
+flag_id = 3
+is_dlc = false
+
+[[bosses]]
+id = "crossbreed_priscilla"
+name = "Crossbreed Priscilla"
+flag_id = 4
+is_dlc = false
+
+[[bosses]]
+id = "great_grey_wolf_sif"
+name = "Great Grey Wolf Sif"
+flag_id = 5
+is_dlc = false
+
+[[bosses]]
+id = "pinwheel"
+name = "Pinwheel"
+flag_id = 6
+is_dlc = false
+
+[[bosses]]
+id = "nito"
+name = "Nito"
+flag_id = 7
+is_dlc = false
+
+[[bosses]]
+id = "chaos_witch_quelaag"
+name = "Chaos Witch Quelaag"
+flag_id = 9
+is_dlc = false
+
+[[bosses]]
+id = "bed_of_chaos"
+name = "The Bed of Chaos"
+flag_id = 10
+is_dlc = false
+
+[[bosses]]
+id = "iron_golem"
+name = "Iron Golem"
+flag_id = 11
+is_dlc = false
+
+[[bosses]]
+id = "ornstein_smough"
+name = "Ornstein and Smough"
+flag_id = 12
+is_dlc = false
+
+[[bosses]]
+id = "four_kings"
+name = "Four Kings"
+flag_id = 13
+is_dlc = false
+
+[[bosses]]
+id = "seath"
+name = "Seath the Scaleless"
+flag_id = 14
+is_dlc = false
+
+[[bosses]]
+id = "gwyn"
+name = "Gwyn, Lord of Cinder"
+flag_id = 15
+is_dlc = false
+
+[[bosses]]
+id = "asylum_demon"
+name = "Asylum Demon"
+flag_id = 16
+is_dlc = false
+
+# 8-digit flag IDs
+[[bosses]]
+id = "taurus_demon"
+name = "Taurus Demon"
+flag_id = 11010901
+is_dlc = false
+
+[[bosses]]
+id = "capra_demon"
+name = "Capra Demon"
+flag_id = 11010902
+is_dlc = false
+
+[[bosses]]
+id = "moonlight_butterfly"
+name = "Moonlight Butterfly"
+flag_id = 11200900
+is_dlc = false
+
+[[bosses]]
+id = "ceaseless_discharge"
+name = "Ceaseless Discharge"
+flag_id = 11410900
+is_dlc = false
+
+[[bosses]]
+id = "centipede_demon"
+name = "Centipede Demon"
+flag_id = 11410901
+is_dlc = false
+
+[[bosses]]
+id = "demon_firesage"
+name = "Demon Firesage"
+flag_id = 11410410
+is_dlc = false
+
+[[bosses]]
+id = "gwyndolin"
+name = "Dark Sun Gwyndolin"
+flag_id = 11510900
+is_dlc = false
+
+[[bosses]]
+id = "stray_demon"
+name = "Stray Demon"
+flag_id = 11810900
+is_dlc = false
+
+# DLC Bosses (Artorias of the Abyss)
+[[bosses]]
+id = "sanctuary_guardian"
+name = "Sanctuary Guardian"
+flag_id = 11210000
+is_dlc = true
+
+[[bosses]]
+id = "artorias"
+name = "Artorias the Abysswalker"
+flag_id = 11210001
+is_dlc = true
+
+[[bosses]]
+id = "manus"
+name = "Manus, Father of the Abyss"
+flag_id = 11210002
+is_dlc = true
+
+[[bosses]]
+id = "kalameet"
+name = "Black Dragon Kalameet"
+flag_id = 11210004
+is_dlc = true
+
+# ============================================================================
+# PRESETS
+# ============================================================================
+
+[[presets]]
+id = "any-percent"
+name = "Any%"
+description = "Defeat Gwyn as fast as possible"
+bosses = [
+    "asylum_demon",
+    "bell_gargoyle",
+    "chaos_witch_quelaag",
+    "iron_golem",
+    "ornstein_smough",
+    "gwyn"
+]
+
+[[presets]]
+id = "all-bosses"
+name = "All Bosses"
+description = "Defeat all bosses including optional and DLC"
+bosses = [
+    "asylum_demon",
+    "taurus_demon",
+    "bell_gargoyle",
+    "capra_demon",
+    "gaping_dragon",
+    "moonlight_butterfly",
+    "chaos_witch_quelaag",
+    "great_grey_wolf_sif",
+    "iron_golem",
+    "ornstein_smough",
+    "crossbreed_priscilla",
+    "gwyndolin",
+    "pinwheel",
+    "nito",
+    "ceaseless_discharge",
+    "demon_firesage",
+    "centipede_demon",
+    "bed_of_chaos",
+    "seath",
+    "four_kings",
+    "stray_demon",
+    # DLC
+    "sanctuary_guardian",
+    "artorias",
+    "manus",
+    "kalameet",
+    # Final
+    "gwyn"
+]
+
+# ============================================================================
+# ATTRIBUTES
+# ============================================================================
+
+[[attributes]]
+id = "vitality"
+name = "Vitality"
+offset = 0
+
+[[attributes]]
+id = "attunement"
+name = "Attunement"
+offset = 4
+
+[[attributes]]
+id = "endurance"
+name = "Endurance"
+offset = 8
+
+[[attributes]]
+id = "strength"
+name = "Strength"
+offset = 12
+
+[[attributes]]
+id = "dexterity"
+name = "Dexterity"
+offset = 16
+
+[[attributes]]
+id = "resistance"
+name = "Resistance"
+offset = 20
+
+[[attributes]]
+id = "intelligence"
+name = "Intelligence"
+offset = 24
+
+[[attributes]]
+id = "faith"
+name = "Faith"
+offset = 28
+
+[[attributes]]
+id = "soul_level"
+name = "Soul Level"
+offset = 32

@@ -1,0 +1,262 @@
+# Armored Core VI: Fires of Rubicon - Game Data
+# Complete mission definitions and autosplitter configuration
+
+[game]
+id = "ac6"
+name = "Armored Core VI: Fires of Rubicon"
+short_name = "AC6"
+process_names = ["armoredcore6.exe"]
+
+[autosplitter]
+engine = "ac6"
+
+# Memory patterns
+[[autosplitter.patterns]]
+name = "cs_event_flag_man"
+pattern = "48 8b 35 ? ? ? ? 83 f8 ff 0f 44 c1"
+resolve = "rip_relative"
+rip_offset = 3
+extra_offset = 0
+
+[[autosplitter.patterns]]
+name = "fd4_time"
+pattern = "48 8b 0d ? ? ? ? 0f 28 c8 f3 0f 59 0d"
+resolve = "rip_relative"
+rip_offset = 3
+extra_offset = 0
+
+[[autosplitter.patterns]]
+name = "cs_menu_man"
+pattern = "48 8b 35 ? ? ? ? 33 db 89 5c 24 20"
+resolve = "rip_relative"
+rip_offset = 3
+extra_offset = 0
+
+[autosplitter.pointers]
+event_flags = { pattern = "cs_event_flag_man", offsets = [0] }
+igt = { pattern = "fd4_time", offsets = [0, 160] }
+
+# ============================================================================
+# MISSIONS - AC6 uses mission completion flags
+# flag_id represents mission completion event flags
+# ============================================================================
+
+# Chapter 1
+[[bosses]]
+id = "illegal_entry"
+name = "Illegal Entry"
+flag_id = 10000
+is_dlc = false
+
+[[bosses]]
+id = "destroy_artillery"
+name = "Destroy the Transport Helicopters"
+flag_id = 10010
+is_dlc = false
+
+[[bosses]]
+id = "grid_135_cleanup"
+name = "Grid 135 Cleanup"
+flag_id = 10020
+is_dlc = false
+
+[[bosses]]
+id = "infiltrate_grid_086"
+name = "Infiltrate Grid 086"
+flag_id = 10030
+is_dlc = false
+
+[[bosses]]
+id = "attack_strider"
+name = "Attack the Dam Complex"
+flag_id = 10040
+is_dlc = false
+
+[[bosses]]
+id = "retrieve_combat_logs"
+name = "Retrieve Combat Logs"
+flag_id = 10050
+is_dlc = false
+
+[[bosses]]
+id = "destroy_ice_worm"
+name = "Destroy the Ice Worm"
+flag_id = 10060
+is_dlc = false
+
+# Chapter 2
+[[bosses]]
+id = "tunnel_sabotage"
+name = "Tunnel Sabotage"
+flag_id = 20000
+is_dlc = false
+
+[[bosses]]
+id = "destroy_fuel_depot"
+name = "Destroy the Fuel Depot"
+flag_id = 20010
+is_dlc = false
+
+[[bosses]]
+id = "prevent_corporate_salvage"
+name = "Prevent Corporate Salvage"
+flag_id = 20020
+is_dlc = false
+
+[[bosses]]
+id = "ocean_crossing"
+name = "Ocean Crossing"
+flag_id = 20030
+is_dlc = false
+
+[[bosses]]
+id = "survey_the_wreck"
+name = "Survey the Uninhabited Floating City"
+flag_id = 20040
+is_dlc = false
+
+[[bosses]]
+id = "investigate_grid_135"
+name = "Investigate BAWS Arsenal No. 2"
+flag_id = 20050
+is_dlc = false
+
+# Chapter 3
+[[bosses]]
+id = "escape_old_spaceport"
+name = "Escape"
+flag_id = 30000
+is_dlc = false
+
+[[bosses]]
+id = "attack_watchpoint"
+name = "Attack the Watchpoint"
+flag_id = 30010
+is_dlc = false
+
+[[bosses]]
+id = "destroy_special_forces"
+name = "Destroy the Special Forces Craft"
+flag_id = 30020
+is_dlc = false
+
+[[bosses]]
+id = "underground_city"
+name = "Underground Exploration - Depth 1"
+flag_id = 30030
+is_dlc = false
+
+[[bosses]]
+id = "underground_city_2"
+name = "Underground Exploration - Depth 2"
+flag_id = 30040
+is_dlc = false
+
+[[bosses]]
+id = "underground_city_3"
+name = "Underground Exploration - Depth 3"
+flag_id = 30050
+is_dlc = false
+
+# Chapter 4
+[[bosses]]
+id = "intercept_rubicon_forces"
+name = "Intercept the Redguns"
+flag_id = 40000
+is_dlc = false
+
+[[bosses]]
+id = "assault_rubicon_forces"
+name = "Attack the Refueling Base"
+flag_id = 40010
+is_dlc = false
+
+[[bosses]]
+id = "eliminate_balteus"
+name = "Eliminate 'Cinder' Carla"
+flag_id = 40020
+is_dlc = false
+
+[[bosses]]
+id = "destroy_watchpoint_alpha"
+name = "Destroy the Watchpoint"
+flag_id = 40030
+is_dlc = false
+
+# Chapter 5
+[[bosses]]
+id = "recapture_wall"
+name = "Reach the Coral Convergence"
+flag_id = 50000
+is_dlc = false
+
+[[bosses]]
+id = "final_battle"
+name = "Bring Down the Xylem"
+flag_id = 50010
+is_dlc = false
+
+[[bosses]]
+id = "fires_of_rubicon"
+name = "Fires of Raven"
+flag_id = 50020
+is_dlc = false
+
+# ============================================================================
+# PRESETS
+# ============================================================================
+
+[[presets]]
+id = "any-percent"
+name = "Any%"
+description = "Complete the game as fast as possible"
+bosses = [
+    "illegal_entry",
+    "destroy_artillery",
+    "attack_strider",
+    "tunnel_sabotage",
+    "ocean_crossing",
+    "escape_old_spaceport",
+    "recapture_wall",
+    "final_battle"
+]
+
+[[presets]]
+id = "all-missions"
+name = "All Missions"
+description = "Complete all main story missions"
+bosses = [
+    "illegal_entry",
+    "destroy_artillery",
+    "grid_135_cleanup",
+    "infiltrate_grid_086",
+    "attack_strider",
+    "retrieve_combat_logs",
+    "destroy_ice_worm",
+    "tunnel_sabotage",
+    "destroy_fuel_depot",
+    "prevent_corporate_salvage",
+    "ocean_crossing",
+    "survey_the_wreck",
+    "investigate_grid_135",
+    "escape_old_spaceport",
+    "attack_watchpoint",
+    "destroy_special_forces",
+    "underground_city",
+    "underground_city_2",
+    "underground_city_3",
+    "intercept_rubicon_forces",
+    "assault_rubicon_forces",
+    "eliminate_balteus",
+    "destroy_watchpoint_alpha",
+    "recapture_wall",
+    "final_battle",
+    "fires_of_rubicon"
+]
+
+# ============================================================================
+# ATTRIBUTES (if applicable)
+# ============================================================================
+
+# AC6 doesn't have traditional attributes like Souls games
+# These could be used for tracking AP (Assembly Points) or similar

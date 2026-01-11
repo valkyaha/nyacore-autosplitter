@@ -1,0 +1,270 @@
+# Elden Ring - Game Data
+# Complete boss definitions and autosplitter configuration
+
+[game]
+id = "elden_ring"
+name = "Elden Ring"
+short_name = "ER"
+process_names = ["eldenring.exe"]
+
+[autosplitter]
+engine = "elden_ring"
+
+# Memory patterns
+[[autosplitter.patterns]]
+name = "virtual_memory_flag"
+pattern = "44 89 7c 24 28 4c 8b 25 ? ? ? ? 4d 85 e4"
+resolve = "rip_relative"
+rip_offset = 8
+extra_offset = 0
+
+[[autosplitter.patterns]]
+name = "fd4_time"
+pattern = "48 8b 05 ? ? ? ? 4c 8b 40 08 4d 85 c0 74 0d 45 0f b6 80 be 00 00 00 e9 13 00 00 00"
+resolve = "rip_relative"
+rip_offset = 3
+extra_offset = 0
+
+[[autosplitter.patterns]]
+name = "world_chr_man"
+pattern = "48 8b 35 ? ? ? ? 48 85 f6 ? ? bb 01 00 00 00 89 5c 24 20 48 8b b6"
+resolve = "rip_relative"
+rip_offset = 3
+extra_offset = 0
+
+[[autosplitter.patterns]]
+name = "game_data_man"
+pattern = "48 8b 05 ? ? ? ? 48 8d 4d c0 41 b8 10 00 00 00 48 8b 10 48 83 c2 1c"
+resolve = "rip_relative"
+rip_offset = 3
+extra_offset = 0
+
+[autosplitter.pointers]
+event_flags = { pattern = "virtual_memory_flag", offsets = [5] }
+igt = { pattern = "fd4_time", offsets = [0, 160] }
+
+# ============================================================================
+# BOSSES - Major Story Bosses
+# ============================================================================
+
+# Limgrave
+[[bosses]]
+id = "margit"
+name = "Margit, the Fell Omen"
+flag_id = 10000850
+is_dlc = false
+
+[[bosses]]
+id = "godrick"
+name = "Godrick the Grafted"
+flag_id = 10000800
+is_dlc = false
+
+# Liurnia
+[[bosses]]
+id = "rennala"
+name = "Rennala, Queen of the Full Moon"
+flag_id = 14000800
+is_dlc = false
+
+[[bosses]]
+id = "red_wolf"
+name = "Red Wolf of Radagon"
+flag_id = 14000850
+is_dlc = false
+
+# Altus Plateau / Leyndell
+[[bosses]]
+id = "godfrey_ghost"
+name = "Godfrey, First Elden Lord (Golden Shade)"
+flag_id = 11000850
+is_dlc = false
+
+[[bosses]]
+id = "morgott"
+name = "Morgott, the Omen King"
+flag_id = 11000800
+is_dlc = false
+
+# Mt. Gelmir
+[[bosses]]
+id = "rykard"
+name = "Rykard, Lord of Blasphemy"
+flag_id = 16000800
+is_dlc = false
+
+# Mountaintops / Consecrated Snowfield
+[[bosses]]
+id = "fire_giant"
+name = "Fire Giant"
+flag_id = 1052520800
+is_dlc = false
+
+# Mohgwyn Palace
+[[bosses]]
+id = "mohg"
+name = "Mohg, Lord of Blood"
+flag_id = 12050800
+is_dlc = false
+
+# Crumbling Farum Azula
+[[bosses]]
+id = "maliketh"
+name = "Maliketh, the Black Blade"
+flag_id = 13000800
+is_dlc = false
+
+[[bosses]]
+id = "godskin_duo"
+name = "Godskin Duo"
+flag_id = 13000850
+is_dlc = false
+
+[[bosses]]
+id = "placidusax"
+name = "Dragonlord Placidusax"
+flag_id = 13000830
+is_dlc = false
+
+# Leyndell, Ashen Capital
+[[bosses]]
+id = "hoarah_loux"
+name = "Hoarah Loux, Warrior"
+flag_id = 11050800
+is_dlc = false
+
+# Haligtree
+[[bosses]]
+id = "loretta"
+name = "Loretta, Knight of the Haligtree"
+flag_id = 15000850
+is_dlc = false
+
+[[bosses]]
+id = "malenia"
+name = "Malenia, Blade of Miquella"
+flag_id = 15000800
+is_dlc = false
+
+# Elden Throne
+[[bosses]]
+id = "radagon"
+name = "Radagon of the Golden Order"
+flag_id = 19000850
+is_dlc = false
+
+[[bosses]]
+id = "elden_beast"
+name = "Elden Beast"
+flag_id = 19000800
+is_dlc = false
+
+# ============================================================================
+# Minor Dungeon Bosses (Sample)
+# ============================================================================
+
+[[bosses]]
+id = "soldier_of_godrick"
+name = "Soldier of Godrick"
+flag_id = 10010800
+is_dlc = false
+
+[[bosses]]
+id = "leonine_misbegotten"
+name = "Leonine Misbegotten"
+flag_id = 31000800
+is_dlc = false
+
+[[bosses]]
+id = "bloodhound_knight_darriwil"
+name = "Bloodhound Knight Darriwil"
+flag_id = 1043300800
+is_dlc = false
+
+# ============================================================================
+# PRESETS
+# ============================================================================
+
+[[presets]]
+id = "any-percent"
+name = "Any%"
+description = "Beat the game as fast as possible"
+bosses = [
+    "margit",
+    "godrick",
+    "rennala",
+    "godfrey_ghost",
+    "morgott",
+    "fire_giant",
+    "maliketh",
+    "hoarah_loux",
+    "radagon",
+    "elden_beast"
+]
+
+[[presets]]
+id = "all-remembrances"
+name = "All Remembrances"
+description = "Defeat all bosses that drop remembrances"
+bosses = [
+    "godrick",
+    "rennala",
+    "morgott",
+    "rykard",
+    "fire_giant",
+    "mohg",
+    "maliketh",
+    "placidusax",
+    "hoarah_loux",
+    "malenia",
+    "elden_beast"
+]
+
+# ============================================================================
+# ATTRIBUTES
+# ============================================================================
+
+[[attributes]]
+id = "vigor"
+name = "Vigor"
+offset = 0
+
+[[attributes]]
+id = "mind"
+name = "Mind"
+offset = 4
+
+[[attributes]]
+id = "endurance"
+name = "Endurance"
+offset = 8
+
+[[attributes]]
+id = "strength"
+name = "Strength"
+offset = 12
+
+[[attributes]]
+id = "dexterity"
+name = "Dexterity"
+offset = 16
+
+[[attributes]]
+id = "intelligence"
+name = "Intelligence"
+offset = 20
+
+[[attributes]]
+id = "faith"
+name = "Faith"
+offset = 24
+
+[[attributes]]
+id = "arcane"
+name = "Arcane"
+offset = 28
+
+[[attributes]]
+id = "rune_level"
+name = "Rune Level"
+offset = 32
