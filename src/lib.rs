@@ -6,7 +6,30 @@
 //! This crate can be used as:
 //! - A Rust library (rlib) for direct integration
 //! - A dynamic library (cdylib) for FFI-based loading
+//!
+//! ## ASL Support
+//!
+//! This library also supports parsing LiveSplit ASL (Auto Splitter Language) files
+//! and converting them to the internal GameData format. This allows using existing
+//! community ASL scripts without modification.
+//!
+//! ```rust,ignore
+//! use nyacore_autosplitter::asl::parse_asl;
+//!
+//! let asl_content = r#"
+//! state("DarkSoulsIII.exe") {
+//!     bool boss : "sprj_event_flag_man", 13000050;
+//! }
+//! split {
+//!     if (current.boss && !old.boss) { return true; }
+//!     return false;
+//! }
+//! "#;
+//!
+//! let game_data = parse_asl(asl_content, Some("ds3")).unwrap();
+//! ```
 
+pub mod asl;
 pub mod config;
 pub mod engine;
 pub mod game_data;
@@ -18,7 +41,10 @@ pub use config::{AutosplitterState, BossFlag};
 pub use engine::GenericGame;
 pub use game_data::GameData;
 pub use games::{ArmoredCore6, DarkSouls1, DarkSouls2, DarkSouls3, EldenRing, Sekiro};
-pub use memory::{parse_pattern, scan_pattern, resolve_rip_relative};
+pub use memory::{parse_pattern, resolve_rip_relative, scan_pattern};
+
+// Re-export ASL types
+pub use asl::{parse_asl, AslError, AslResult};
 
 use std::collections::HashMap;
 use std::ffi::CString;
@@ -1013,6 +1039,98 @@ pub extern "C" fn autosplitter_start_with_game_data(
     match autosplitter.start_with_game_data(game_data, boss_flags) {
         Ok(()) => std::ptr::null_mut(),
         Err(e) => CString::new(e).unwrap().into_raw(),
+    }
+}
+
+/// Start autosplitter with ASL (LiveSplit Auto Splitter Language) script
+/// asl_content: ASL script content as a string
+/// boss_flags_json: JSON array of BossFlag objects
+/// engine_hint: Optional engine hint (e.g., "ds3", "elden_ring"), can be null
+/// Returns error message or null on success (caller must free error string)
+#[no_mangle]
+pub extern "C" fn autosplitter_start_with_asl(
+    asl_content: *const c_char,
+    boss_flags_json: *const c_char,
+    engine_hint: *const c_char,
+) -> *mut c_char {
+    if asl_content.is_null() || boss_flags_json.is_null() {
+        return CString::new("Null pointer passed").unwrap().into_raw();
+    }
+
+    let asl_str = unsafe { std::ffi::CStr::from_ptr(asl_content).to_string_lossy() };
+    let boss_flags_str = unsafe { std::ffi::CStr::from_ptr(boss_flags_json).to_string_lossy() };
+    let hint = if engine_hint.is_null() {
+        None
+    } else {
+        Some(unsafe { std::ffi::CStr::from_ptr(engine_hint).to_string_lossy() })
+    };
+
+    // Parse ASL and convert to GameData
+    let game_data = match asl::parse_asl(&asl_str, hint.as_deref()) {
+        Ok(data) => data,
+        Err(e) => return CString::new(format!("Failed to parse ASL: {}", e)).unwrap().into_raw(),
+    };
+
+    let boss_flags: Vec<BossFlag> = match serde_json::from_str(&boss_flags_str) {
+        Ok(flags) => flags,
+        Err(e) => {
+            return CString::new(format!("Failed to parse boss flags: {}", e))
+                .unwrap()
+                .into_raw()
+        }
+    };
+
+    let guard = AUTOSPLITTER.lock().unwrap();
+    let autosplitter = match guard.as_ref() {
+        Some(a) => a,
+        None => return CString::new("Autosplitter not initialized").unwrap().into_raw(),
+    };
+
+    match autosplitter.start_with_game_data(game_data, boss_flags) {
+        Ok(()) => std::ptr::null_mut(),
+        Err(e) => CString::new(e).unwrap().into_raw(),
+    }
+}
+
+/// Parse ASL content and return GameData as TOML string
+/// asl_content: ASL script content as a string
+/// engine_hint: Optional engine hint (e.g., "ds3", "elden_ring"), can be null
+/// Returns TOML string on success, or error message prefixed with "ERROR: " on failure
+/// Caller must free the returned string with autosplitter_free_string
+#[no_mangle]
+pub extern "C" fn autosplitter_parse_asl(
+    asl_content: *const c_char,
+    engine_hint: *const c_char,
+) -> *mut c_char {
+    if asl_content.is_null() {
+        return CString::new("ERROR: Null pointer passed").unwrap().into_raw();
+    }
+
+    let asl_str = unsafe { std::ffi::CStr::from_ptr(asl_content).to_string_lossy() };
+    let hint = if engine_hint.is_null() {
+        None
+    } else {
+        Some(unsafe { std::ffi::CStr::from_ptr(engine_hint).to_string_lossy() })
+    };
+
+    // Parse ASL and convert to GameData
+    let game_data = match asl::parse_asl(&asl_str, hint.as_deref()) {
+        Ok(data) => data,
+        Err(e) => {
+            return CString::new(format!("ERROR: Failed to parse ASL: {}", e))
+                .unwrap()
+                .into_raw()
+        }
+    };
+
+    // Serialize to TOML
+    match toml::to_string_pretty(&game_data) {
+        Ok(toml_str) => CString::new(toml_str).unwrap().into_raw(),
+        Err(e) => {
+            CString::new(format!("ERROR: Failed to serialize to TOML: {}", e))
+                .unwrap()
+                .into_raw()
+        }
     }
 }
 
