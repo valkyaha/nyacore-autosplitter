@@ -1015,3 +1015,269 @@ pub extern "C" fn autosplitter_start_with_game_data(
         Err(e) => CString::new(e).unwrap().into_raw(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =============================================================================
+    // GameType tests
+    // =============================================================================
+
+    #[test]
+    fn test_game_type_from_process_name_ds1() {
+        assert_eq!(
+            GameType::from_process_name("DarkSoulsRemastered.exe"),
+            Some(GameType::DarkSouls1)
+        );
+        assert_eq!(
+            GameType::from_process_name("darksoulsremastered.exe"),
+            Some(GameType::DarkSouls1)
+        );
+        assert_eq!(
+            GameType::from_process_name("DARKSOULSREMASTERED.EXE"),
+            Some(GameType::DarkSouls1)
+        );
+    }
+
+    #[test]
+    fn test_game_type_from_process_name_ds2() {
+        assert_eq!(
+            GameType::from_process_name("DarkSoulsII.exe"),
+            Some(GameType::DarkSouls2)
+        );
+        assert_eq!(
+            GameType::from_process_name("darksoulsii.exe"),
+            Some(GameType::DarkSouls2)
+        );
+    }
+
+    #[test]
+    fn test_game_type_from_process_name_ds3() {
+        assert_eq!(
+            GameType::from_process_name("DarkSoulsIII.exe"),
+            Some(GameType::DarkSouls3)
+        );
+        assert_eq!(
+            GameType::from_process_name("darksoulsiii.exe"),
+            Some(GameType::DarkSouls3)
+        );
+    }
+
+    #[test]
+    fn test_game_type_from_process_name_elden_ring() {
+        assert_eq!(
+            GameType::from_process_name("eldenring.exe"),
+            Some(GameType::EldenRing)
+        );
+        assert_eq!(
+            GameType::from_process_name("EldenRing.exe"),
+            Some(GameType::EldenRing)
+        );
+    }
+
+    #[test]
+    fn test_game_type_from_process_name_sekiro() {
+        assert_eq!(
+            GameType::from_process_name("sekiro.exe"),
+            Some(GameType::Sekiro)
+        );
+        assert_eq!(
+            GameType::from_process_name("Sekiro.exe"),
+            Some(GameType::Sekiro)
+        );
+    }
+
+    #[test]
+    fn test_game_type_from_process_name_ac6() {
+        assert_eq!(
+            GameType::from_process_name("armoredcore6.exe"),
+            Some(GameType::ArmoredCore6)
+        );
+        assert_eq!(
+            GameType::from_process_name("ArmoredCore6.exe"),
+            Some(GameType::ArmoredCore6)
+        );
+    }
+
+    #[test]
+    fn test_game_type_from_process_name_unknown() {
+        assert_eq!(GameType::from_process_name("notepad.exe"), None);
+        assert_eq!(GameType::from_process_name(""), None);
+        assert_eq!(GameType::from_process_name("darksouls.exe"), None); // Not specific enough
+    }
+
+    #[test]
+    fn test_game_type_from_process_name_ds2_vs_ds3_ordering() {
+        // DS3 contains "darksoulsiii", DS2 contains "darksoulsii"
+        // The order matters - must check DS3 first because DS2 pattern matches DS3
+        assert_eq!(
+            GameType::from_process_name("darksoulsiii.exe"),
+            Some(GameType::DarkSouls3)
+        );
+    }
+
+    #[test]
+    fn test_game_type_process_names() {
+        assert_eq!(
+            GameType::DarkSouls1.process_names(),
+            &["DarkSoulsRemastered.exe"]
+        );
+        assert_eq!(
+            GameType::DarkSouls2.process_names(),
+            &["DarkSoulsII.exe"]
+        );
+        assert_eq!(
+            GameType::DarkSouls3.process_names(),
+            &["DarkSoulsIII.exe"]
+        );
+        assert_eq!(
+            GameType::EldenRing.process_names(),
+            &["eldenring.exe"]
+        );
+        assert_eq!(
+            GameType::Sekiro.process_names(),
+            &["sekiro.exe"]
+        );
+        assert_eq!(
+            GameType::ArmoredCore6.process_names(),
+            &["armoredcore6.exe"]
+        );
+    }
+
+    #[test]
+    fn test_game_type_display_name() {
+        assert_eq!(
+            GameType::DarkSouls1.display_name(),
+            "Dark Souls Remastered"
+        );
+        assert_eq!(
+            GameType::DarkSouls2.display_name(),
+            "Dark Souls II: Scholar of the First Sin"
+        );
+        assert_eq!(
+            GameType::DarkSouls3.display_name(),
+            "Dark Souls III"
+        );
+        assert_eq!(
+            GameType::EldenRing.display_name(),
+            "Elden Ring"
+        );
+        assert_eq!(
+            GameType::Sekiro.display_name(),
+            "Sekiro: Shadows Die Twice"
+        );
+        assert_eq!(
+            GameType::ArmoredCore6.display_name(),
+            "Armored Core VI: Fires of Rubicon"
+        );
+    }
+
+    #[test]
+    fn test_game_type_clone() {
+        let game = GameType::DarkSouls3;
+        let cloned = game.clone();
+        assert_eq!(game, cloned);
+    }
+
+    #[test]
+    fn test_game_type_debug() {
+        let game = GameType::EldenRing;
+        let debug_str = format!("{:?}", game);
+        assert_eq!(debug_str, "EldenRing");
+    }
+
+    #[test]
+    fn test_game_type_copy() {
+        let game = GameType::Sekiro;
+        let copied = game; // Copy, not move
+        assert_eq!(game, copied);
+    }
+
+    // =============================================================================
+    // Autosplitter tests
+    // =============================================================================
+
+    #[test]
+    fn test_autosplitter_new() {
+        let autosplitter = Autosplitter::new();
+        assert!(!autosplitter.is_running());
+    }
+
+    #[test]
+    fn test_autosplitter_default() {
+        let autosplitter = Autosplitter::default();
+        assert!(!autosplitter.is_running());
+    }
+
+    #[test]
+    fn test_autosplitter_get_state_default() {
+        let autosplitter = Autosplitter::new();
+        let state = autosplitter.get_state();
+
+        assert!(!state.running);
+        assert!(state.game_id.is_empty());
+        assert!(!state.process_attached);
+        assert!(state.process_id.is_none());
+        assert!(state.bosses_defeated.is_empty());
+        assert!(state.boss_kill_counts.is_empty());
+    }
+
+    #[test]
+    fn test_autosplitter_get_defeated_bosses() {
+        let autosplitter = Autosplitter::new();
+        let bosses = autosplitter.get_defeated_bosses();
+        assert!(bosses.is_empty());
+    }
+
+    #[test]
+    fn test_autosplitter_stop() {
+        let autosplitter = Autosplitter::new();
+        autosplitter.stop();
+        assert!(!autosplitter.is_running());
+    }
+
+    #[test]
+    fn test_autosplitter_reset() {
+        let autosplitter = Autosplitter::new();
+        autosplitter.reset();
+        // Reset should clear the bosses_defeated list
+        let state = autosplitter.get_state();
+        assert!(state.bosses_defeated.is_empty());
+        assert!(state.boss_kill_counts.is_empty());
+    }
+
+    // =============================================================================
+    // BossFlag and AutosplitterState re-export tests
+    // =============================================================================
+
+    #[test]
+    fn test_boss_flag_reexport() {
+        let flag = BossFlag {
+            boss_id: "test_boss".to_string(),
+            boss_name: "Test Boss".to_string(),
+            flag_id: 12345,
+            is_dlc: false,
+        };
+
+        assert_eq!(flag.boss_id, "test_boss");
+        assert_eq!(flag.flag_id, 12345);
+    }
+
+    #[test]
+    fn test_autosplitter_state_reexport() {
+        let state = AutosplitterState::default();
+        assert!(!state.running);
+    }
+
+    // =============================================================================
+    // Module re-export tests
+    // =============================================================================
+
+    #[test]
+    fn test_parse_pattern_reexport() {
+        // Test that parse_pattern is properly re-exported
+        let pattern = parse_pattern("48 8b ?");
+        assert_eq!(pattern.len(), 3);
+    }
+}

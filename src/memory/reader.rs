@@ -377,3 +377,243 @@ pub fn resolve_rip_relative(
     let rip = instruction_addr + instruction_len;
     Some((rip as i64 + rel_offset as i64) as usize)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =============================================================================
+    // parse_pattern tests
+    // =============================================================================
+
+    #[test]
+    fn test_parse_pattern_basic() {
+        let pattern = parse_pattern("48 8b 35");
+        assert_eq!(pattern, vec![Some(0x48), Some(0x8b), Some(0x35)]);
+    }
+
+    #[test]
+    fn test_parse_pattern_with_wildcards() {
+        let pattern = parse_pattern("48 8b 35 ? ? ? ?");
+        assert_eq!(pattern, vec![
+            Some(0x48), Some(0x8b), Some(0x35),
+            None, None, None, None
+        ]);
+    }
+
+    #[test]
+    fn test_parse_pattern_double_question() {
+        let pattern = parse_pattern("48 ?? 35");
+        assert_eq!(pattern, vec![Some(0x48), None, Some(0x35)]);
+    }
+
+    #[test]
+    fn test_parse_pattern_mixed_case() {
+        let pattern = parse_pattern("4A 8B 35 aB Cd");
+        assert_eq!(pattern, vec![
+            Some(0x4a), Some(0x8b), Some(0x35),
+            Some(0xab), Some(0xcd)
+        ]);
+    }
+
+    #[test]
+    fn test_parse_pattern_empty() {
+        let pattern = parse_pattern("");
+        assert!(pattern.is_empty());
+    }
+
+    #[test]
+    fn test_parse_pattern_only_wildcards() {
+        let pattern = parse_pattern("? ? ?");
+        assert_eq!(pattern, vec![None, None, None]);
+    }
+
+    #[test]
+    fn test_parse_pattern_single_byte() {
+        let pattern = parse_pattern("FF");
+        assert_eq!(pattern, vec![Some(0xff)]);
+    }
+
+    #[test]
+    fn test_parse_pattern_invalid_hex() {
+        // Invalid hex should return None for that byte
+        let pattern = parse_pattern("48 ZZ 35");
+        assert_eq!(pattern, vec![Some(0x48), None, Some(0x35)]);
+    }
+
+    #[test]
+    fn test_parse_pattern_extra_spaces() {
+        let pattern = parse_pattern("48  8b   35");
+        assert_eq!(pattern, vec![Some(0x48), Some(0x8b), Some(0x35)]);
+    }
+
+    #[test]
+    fn test_parse_pattern_common_ds3() {
+        // Common Dark Souls 3 pattern for SprjEventFlagMan
+        let pattern = parse_pattern("48 8b 0d ? ? ? ? 48 85 c9 74 ? e8");
+        assert_eq!(pattern.len(), 13);
+        assert_eq!(pattern[0], Some(0x48));
+        assert_eq!(pattern[1], Some(0x8b));
+        assert_eq!(pattern[2], Some(0x0d));
+        assert_eq!(pattern[3], None);
+        assert_eq!(pattern[4], None);
+        assert_eq!(pattern[5], None);
+        assert_eq!(pattern[6], None);
+        assert_eq!(pattern[7], Some(0x48));
+        assert_eq!(pattern[12], Some(0xe8));
+    }
+
+    // =============================================================================
+    // find_pattern tests
+    // =============================================================================
+
+    #[test]
+    fn test_find_pattern_basic() {
+        let data = vec![0x00, 0x48, 0x8b, 0x35, 0x00];
+        let pattern = vec![Some(0x48), Some(0x8b), Some(0x35)];
+
+        let result = find_pattern(&data, &pattern);
+        assert_eq!(result, Some(1));
+    }
+
+    #[test]
+    fn test_find_pattern_at_start() {
+        let data = vec![0x48, 0x8b, 0x35, 0x00];
+        let pattern = vec![Some(0x48), Some(0x8b), Some(0x35)];
+
+        let result = find_pattern(&data, &pattern);
+        assert_eq!(result, Some(0));
+    }
+
+    #[test]
+    fn test_find_pattern_at_end() {
+        let data = vec![0x00, 0x00, 0x48, 0x8b, 0x35];
+        let pattern = vec![Some(0x48), Some(0x8b), Some(0x35)];
+
+        let result = find_pattern(&data, &pattern);
+        assert_eq!(result, Some(2));
+    }
+
+    #[test]
+    fn test_find_pattern_with_wildcards() {
+        let data = vec![0x00, 0x48, 0xFF, 0x35, 0x00];
+        let pattern = vec![Some(0x48), None, Some(0x35)];
+
+        let result = find_pattern(&data, &pattern);
+        assert_eq!(result, Some(1));
+    }
+
+    #[test]
+    fn test_find_pattern_not_found() {
+        let data = vec![0x00, 0x48, 0x8b, 0x36, 0x00];
+        let pattern = vec![Some(0x48), Some(0x8b), Some(0x35)];
+
+        let result = find_pattern(&data, &pattern);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_find_pattern_empty_pattern() {
+        let data = vec![0x00, 0x48, 0x8b];
+        let pattern: Vec<Option<u8>> = vec![];
+
+        let result = find_pattern(&data, &pattern);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_find_pattern_empty_data() {
+        let data: Vec<u8> = vec![];
+        let pattern = vec![Some(0x48)];
+
+        let result = find_pattern(&data, &pattern);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_find_pattern_pattern_longer_than_data() {
+        let data = vec![0x48, 0x8b];
+        let pattern = vec![Some(0x48), Some(0x8b), Some(0x35)];
+
+        let result = find_pattern(&data, &pattern);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_find_pattern_exact_match() {
+        let data = vec![0x48, 0x8b, 0x35];
+        let pattern = vec![Some(0x48), Some(0x8b), Some(0x35)];
+
+        let result = find_pattern(&data, &pattern);
+        assert_eq!(result, Some(0));
+    }
+
+    #[test]
+    fn test_find_pattern_multiple_matches_returns_first() {
+        let data = vec![0x48, 0x48, 0x48];
+        let pattern = vec![Some(0x48)];
+
+        let result = find_pattern(&data, &pattern);
+        assert_eq!(result, Some(0));
+    }
+
+    #[test]
+    fn test_find_pattern_all_wildcards() {
+        let data = vec![0x48, 0x8b, 0x35];
+        let pattern = vec![None, None, None];
+
+        let result = find_pattern(&data, &pattern);
+        assert_eq!(result, Some(0));
+    }
+
+    #[test]
+    fn test_find_pattern_complex() {
+        // Simulate finding a RIP-relative instruction pattern
+        let data = vec![
+            0x00, 0x00, 0x00, 0x00,
+            0x48, 0x8b, 0x0d, 0x12, 0x34, 0x56, 0x78,
+            0x48, 0x85, 0xc9,
+            0x00, 0x00,
+        ];
+        let pattern = vec![
+            Some(0x48), Some(0x8b), Some(0x0d),
+            None, None, None, None,  // RIP offset
+            Some(0x48), Some(0x85), Some(0xc9),
+        ];
+
+        let result = find_pattern(&data, &pattern);
+        assert_eq!(result, Some(4));
+    }
+
+    // =============================================================================
+    // Integration tests
+    // =============================================================================
+
+    #[test]
+    fn test_parse_and_find_pattern() {
+        let data = vec![
+            0x00, 0x48, 0x8b, 0x35, 0xAA, 0xBB, 0xCC, 0xDD, 0x00
+        ];
+        let pattern = parse_pattern("48 8b 35 ? ? ? ?");
+
+        let result = find_pattern(&data, &pattern);
+        assert_eq!(result, Some(1));
+    }
+
+    #[test]
+    fn test_ds3_event_flag_pattern() {
+        // Simulated DS3 memory with event flag manager pattern
+        let data = vec![
+            0x00, 0x00, 0x00, 0x00,
+            0x48, 0x8b, 0x0d, 0x11, 0x22, 0x33, 0x44,
+            0x48, 0x85, 0xc9,
+            0x74, 0x0a,
+            0xe8, 0x00, 0x00, 0x00, 0x00,
+        ];
+
+        let pattern = parse_pattern("48 8b 0d ? ? ? ? 48 85 c9 74 ? e8");
+        let result = find_pattern(&data, &pattern);
+
+        assert_eq!(result, Some(4));
+    }
+}
