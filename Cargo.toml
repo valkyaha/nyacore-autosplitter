@@ -35,4 +35,3 @@ libc = "0.2"
 
 [features]
 default = []
-vision = []
