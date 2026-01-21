@@ -389,6 +389,18 @@ impl Autosplitter {
             return Err("No boss flags defined".to_string());
         }
 
+        // Try to detect if this is a known game type - use hardcoded implementations for better reliability
+        let known_game_type = game_data.game.process_names.iter()
+            .find_map(|name| GameType::from_process_name(name));
+
+        if let Some(game_type) = known_game_type {
+            log::info!(
+                "Detected known game type {:?} from GameData, using hardcoded implementation",
+                game_type
+            );
+            return self.start(game_type, boss_flags);
+        }
+
         log::info!(
             "Starting autosplitter for {} (engine: {}) with {} boss flags",
             game_data.game.name,
