@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v0.1.0)'
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Rust
+      uses: dtolnay/rust-action@stable
+      with:
+        toolchain: stable
+
+    - name: Build Release
+      run: cargo build --release
+
+    - name: Rename DLL
+      run: |
+        copy target\release\nyacore_autosplitter.dll nyacore_autosplitter.dll
+
+    - name: Get version
+      id: version
+      shell: bash
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        name: NYACore Autosplitter ${{ steps.version.outputs.version }}
+        body: |
+          ## NYACore Autosplitter ${{ steps.version.outputs.version }}
+
+          Automatic boss defeat detection for FromSoftware games.
+
+          ### Supported Games
+          - Dark Souls Remastered
+          - Dark Souls II: Scholar of the First Sin
+          - Dark Souls III
+          - Elden Ring
+          - Sekiro: Shadows Die Twice
+          - Armored Core VI
+
+          ### Installation
+          1. Download `nyacore_autosplitter.dll`
+          2. Place it in `%APPDATA%/NYA Core/plugins/`
+          3. Restart NYA Core
+
+          ### Requirements
+          - Windows 10/11
+          - NYA Core 3.1.0 or later
+        files: |
+          nyacore_autosplitter.dll
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
