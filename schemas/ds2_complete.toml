@@ -1,0 +1,404 @@
+# Dark Souls II: Scholar of the First Sin - Complete Autosplitter Configuration
+# Uses the "kill_counter" algorithm - checks boss kill count > 0
+
+[game]
+id = "ds2"
+name = "Dark Souls II: Scholar of the First Sin"
+short_name = "DS2"
+process_names = ["DarkSoulsII.exe"]
+
+# =============================================================================
+# AUTOSPLITTER CONFIGURATION
+# =============================================================================
+
+[autosplitter]
+# DS2 uses kill counters instead of event flags
+algorithm = "kill_counter"
+
+# =============================================================================
+# MEMORY PATTERNS
+# =============================================================================
+
+[[autosplitter.patterns]]
+name = "game_manager_imp"
+pattern = "48 8b 35 ? ? ? ? 48 8b e9 48 85 f6"
+rip_offset = 3
+instruction_len = 7
+
+[[autosplitter.patterns]]
+name = "load_state"
+pattern = "48 89 05 ? ? ? ? b0 01 48 83 c4 28"
+rip_offset = 3
+instruction_len = 7
+
+# =============================================================================
+# DERIVED POINTERS
+# =============================================================================
+
+[autosplitter.pointers]
+# Boss counters: GameManagerImp -> [0x0, 0x70, 0x28, 0x20, 0x8]
+boss_counters = { base = "game_manager_imp", offsets = [0, 0x70, 0x28, 0x20, 0x8] }
+
+# Event flag manager: GameManagerImp -> [0x0, 0x70, 0x20]
+event_flags = { base = "game_manager_imp", offsets = [0, 0x70, 0x20] }
+
+# Position: GameManagerImp -> [0x0, 0xD0, 0x100]
+position = { base = "game_manager_imp", offsets = [0, 0xD0, 0x100] }
+
+# Attributes: GameManagerImp -> [0x0, 0xD0, 0x490]
+attributes = { base = "game_manager_imp", offsets = [0, 0xD0, 0x490] }
+
+# =============================================================================
+# KILL COUNTER CONFIG
+# Required when algorithm = "kill_counter"
+# =============================================================================
+
+[autosplitter.kill_counter_config]
+# Pattern that provides the base address
+primary_pattern = "game_manager_imp"
+
+# Offset chain from pattern to boss counter array base
+# Each offset is dereferenced in sequence
+chain_offsets = [0x70, 0x28, 0x20, 0x8]
+
+# =============================================================================
+# CUSTOM FIELDS
+# DS2 bosses can have kill_count > 1 (e.g., Pursuer appears multiple times)
+# =============================================================================
+
+[custom_fields.kill_count]
+type = "integer"
+label = "Kill Count"
+description = "Number of times this boss needs to be killed"
+default = 1
+min = 1
+max = 5
+applies_to = "boss"
+
+# =============================================================================
+# BOSSES
+# flag_id here is the OFFSET from boss_counters base, not an event flag
+# The algorithm reads: kill_count = read_i32(boss_counters + offset)
+# Boss is defeated when kill_count > 0
+# =============================================================================
+
+[[bosses]]
+id = "last_giant"
+name = "The Last Giant"
+flag_id = 0x0
+is_dlc = false
+
+[[bosses]]
+id = "pursuer"
+name = "The Pursuer"
+flag_id = 0x4
+is_dlc = false
+# Pursuer appears multiple times, custom kill_count can be set per preset
+custom = { kill_count = 1 }
+
+[[bosses]]
+id = "dragonrider"
+name = "Dragonrider"
+flag_id = 0x20
+is_dlc = false
+
+[[bosses]]
+id = "old_dragonslayer"
+name = "Old Dragonslayer"
+flag_id = 0x8
+is_dlc = false
+
+[[bosses]]
+id = "flexile_sentry"
+name = "Flexile Sentry"
+flag_id = 0xC
+is_dlc = false
+
+[[bosses]]
+id = "ruin_sentinels"
+name = "Ruin Sentinels"
+flag_id = 0x10
+is_dlc = false
+
+[[bosses]]
+id = "lost_sinner"
+name = "The Lost Sinner"
+flag_id = 0x14
+is_dlc = false
+
+[[bosses]]
+id = "belfry_gargoyles"
+name = "Belfry Gargoyles"
+flag_id = 0x18
+is_dlc = false
+
+[[bosses]]
+id = "skeleton_lords"
+name = "Skeleton Lords"
+flag_id = 0x1C
+is_dlc = false
+
+[[bosses]]
+id = "executioners_chariot"
+name = "Executioner's Chariot"
+flag_id = 0x24
+is_dlc = false
+
+[[bosses]]
+id = "covetous_demon"
+name = "Covetous Demon"
+flag_id = 0x28
+is_dlc = false
+
+[[bosses]]
+id = "mytha"
+name = "Mytha, the Baneful Queen"
+flag_id = 0x2C
+is_dlc = false
+
+[[bosses]]
+id = "smelter_demon"
+name = "Smelter Demon"
+flag_id = 0x30
+is_dlc = false
+
+[[bosses]]
+id = "old_iron_king"
+name = "Old Iron King"
+flag_id = 0x34
+is_dlc = false
+
+[[bosses]]
+id = "scorpioness_najka"
+name = "Scorpioness Najka"
+flag_id = 0x38
+is_dlc = false
+
+[[bosses]]
+id = "royal_rat_authority"
+name = "Royal Rat Authority"
+flag_id = 0x3C
+is_dlc = false
+
+[[bosses]]
+id = "prowling_magus"
+name = "Prowling Magus"
+flag_id = 0x40
+is_dlc = false
+
+[[bosses]]
+id = "dukes_dear_freja"
+name = "The Duke's Dear Freja"
+flag_id = 0x44
+is_dlc = false
+
+[[bosses]]
+id = "royal_rat_vanguard"
+name = "Royal Rat Vanguard"
+flag_id = 0x48
+is_dlc = false
+
+[[bosses]]
+id = "the_rotten"
+name = "The Rotten"
+flag_id = 0x4C
+is_dlc = false
+
+[[bosses]]
+id = "dragonrider_duo"
+name = "Dragonrider (Duo)"
+flag_id = 0x50
+is_dlc = false
+
+[[bosses]]
+id = "looking_glass_knight"
+name = "Looking Glass Knight"
+flag_id = 0x54
+is_dlc = false
+
+[[bosses]]
+id = "demon_of_song"
+name = "Demon of Song"
+flag_id = 0x58
+is_dlc = false
+
+[[bosses]]
+id = "velstadt"
+name = "Velstadt, the Royal Aegis"
+flag_id = 0x5C
+is_dlc = false
+
+[[bosses]]
+id = "vendrick"
+name = "Vendrick"
+flag_id = 0x60
+is_dlc = false
+
+[[bosses]]
+id = "guardian_dragon"
+name = "Guardian Dragon"
+flag_id = 0x64
+is_dlc = false
+
+[[bosses]]
+id = "ancient_dragon"
+name = "Ancient Dragon"
+flag_id = 0x68
+is_dlc = false
+
+[[bosses]]
+id = "giant_lord"
+name = "Giant Lord"
+flag_id = 0x6C
+is_dlc = false
+
+[[bosses]]
+id = "throne_watcher_defender"
+name = "Throne Watcher & Defender"
+flag_id = 0x70
+is_dlc = false
+
+[[bosses]]
+id = "nashandra"
+name = "Nashandra"
+flag_id = 0x74
+is_dlc = false
+
+[[bosses]]
+id = "aldia"
+name = "Aldia, Scholar of the First Sin"
+flag_id = 0x78
+is_dlc = false
+
+# DLC Bosses
+[[bosses]]
+id = "elana"
+name = "Elana, the Squalid Queen"
+flag_id = 0x7C
+is_dlc = true
+
+[[bosses]]
+id = "sinh"
+name = "Sinh, the Slumbering Dragon"
+flag_id = 0x80
+is_dlc = true
+
+[[bosses]]
+id = "afflicted_graverobber"
+name = "Afflicted Graverobber, Ancient Soldier Varg, and Cerah the Old Explorer"
+flag_id = 0x84
+is_dlc = true
+
+[[bosses]]
+id = "fume_knight"
+name = "Fume Knight"
+flag_id = 0x88
+is_dlc = true
+
+[[bosses]]
+id = "sir_alonne"
+name = "Sir Alonne"
+flag_id = 0x8C
+is_dlc = true
+
+[[bosses]]
+id = "blue_smelter_demon"
+name = "Blue Smelter Demon"
+flag_id = 0x90
+is_dlc = true
+
+[[bosses]]
+id = "aava"
+name = "Aava, the King's Pet"
+flag_id = 0x94
+is_dlc = true
+
+[[bosses]]
+id = "burnt_ivory_king"
+name = "Burnt Ivory King"
+flag_id = 0x98
+is_dlc = true
+
+[[bosses]]
+id = "lud_zallen"
+name = "Lud and Zallen, the King's Pets"
+flag_id = 0x9C
+is_dlc = true
+
+# =============================================================================
+# PRESETS
+# =============================================================================
+
+[[presets]]
+id = "any-percent"
+name = "Any%"
+description = "Beat the game as fast as possible"
+bosses = [
+    "last_giant",
+    "pursuer",
+    "dragonrider",
+    "old_dragonslayer",
+    "flexile_sentry",
+    "lost_sinner",
+    "skeleton_lords",
+    "covetous_demon",
+    "mytha",
+    "old_iron_king",
+    "scorpioness_najka",
+    "dukes_dear_freja",
+    "the_rotten",
+    "dragonrider_duo",
+    "looking_glass_knight",
+    "velstadt",
+    "guardian_dragon",
+    "throne_watcher_defender",
+    "nashandra"
+]
+
+[[presets]]
+id = "all-bosses"
+name = "All Bosses"
+description = "Defeat all main game and DLC bosses"
+bosses = [
+    "last_giant",
+    "pursuer",
+    "dragonrider",
+    "old_dragonslayer",
+    "flexile_sentry",
+    "ruin_sentinels",
+    "lost_sinner",
+    "belfry_gargoyles",
+    "skeleton_lords",
+    "executioners_chariot",
+    "covetous_demon",
+    "mytha",
+    "smelter_demon",
+    "old_iron_king",
+    "scorpioness_najka",
+    "royal_rat_authority",
+    "prowling_magus",
+    "dukes_dear_freja",
+    "royal_rat_vanguard",
+    "the_rotten",
+    "dragonrider_duo",
+    "looking_glass_knight",
+    "demon_of_song",
+    "velstadt",
+    "vendrick",
+    "guardian_dragon",
+    "ancient_dragon",
+    "giant_lord",
+    "throne_watcher_defender",
+    "nashandra",
+    "aldia",
+    # DLC
+    "elana",
+    "sinh",
+    "afflicted_graverobber",
+    "fume_knight",
+    "sir_alonne",
+    "blue_smelter_demon",
+    "aava",
+    "burnt_ivory_king",
+    "lud_zallen"
+]

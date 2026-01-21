@@ -1,0 +1,436 @@
+# Dark Souls III - Complete Autosplitter Configuration
+# This file demonstrates the full configuration needed for PluginFlagReader
+# to work without any hardcoded game-specific code.
+
+[game]
+id = "ds3"
+name = "Dark Souls III"
+short_name = "DS3"
+process_names = ["DarkSoulsIII.exe"]
+
+# =============================================================================
+# AUTOSPLITTER CONFIGURATION
+# =============================================================================
+
+[autosplitter]
+# Algorithm type determines how flags are read:
+# - "category_decomposition" - DS3/Sekiro style (FieldArea traversal)
+# - "binary_tree" - Elden Ring/AC6 style (tree navigation)
+# - "offset_table" - DS1 style (group/area offset tables)
+# - "kill_counter" - DS2 style (boss kill counters)
+algorithm = "category_decomposition"
+
+# =============================================================================
+# MEMORY PATTERNS
+# =============================================================================
+
+[[autosplitter.patterns]]
+name = "sprj_event_flag_man"
+pattern = "48 c7 05 ? ? ? ? 00 00 00 00 48 8b 7c 24 38 c7 46 54 ff ff ff ff 48 83 c4 20 5e c3"
+rip_offset = 3
+instruction_len = 11
+
+[[autosplitter.patterns]]
+name = "field_area"
+pattern = "4c 8b 3d ? ? ? ? 8b 45 87 83 f8 ff 74 69 48 8d 4d 8f 48 89 4d 9f 89 45 8f 48 8d 55 8f 49 8b 4f 10"
+rip_offset = 3
+instruction_len = 7
+
+[[autosplitter.patterns]]
+name = "game_data_man"
+pattern = "48 8b 0d ? ? ? ? 4c 8d 44 24 40 45 33 c9 48 8b d3 40 88"
+rip_offset = 3
+instruction_len = 7
+
+[[autosplitter.patterns]]
+name = "new_menu_system"
+pattern = "48 8b 0d ? ? ? ? ba 01 00 00 00 e8 ? ? ? ? 48 8b d8 48 85 c0 74 2e 38 48 08"
+rip_offset = 3
+instruction_len = 7
+
+[[autosplitter.patterns]]
+name = "player_ins"
+pattern = "48 8b 0d ? ? ? ? 48 85 c9 0f 84 ? ? ? ? 48 8b 41 50 48 85 c0"
+rip_offset = 3
+instruction_len = 7
+
+[[autosplitter.patterns]]
+name = "loading"
+pattern = "c6 05 ? ? ? ? 00 48 8b 0d ? ? ? ? 48 85 c9 74 11"
+rip_offset = 2
+instruction_len = 7
+
+[[autosplitter.patterns]]
+name = "sprj_fade_imp"
+pattern = "48 8b 0d ? ? ? ? 48 8d 55 17 48 8b 01 ff 90 10 01 00 00"
+rip_offset = 3
+instruction_len = 7
+
+# =============================================================================
+# DERIVED POINTERS
+# From base patterns, apply offset chains to get final addresses
+# =============================================================================
+
+[autosplitter.pointers]
+# Event flags manager - just dereference the pattern result
+event_flags = { base = "sprj_event_flag_man", offsets = [0] }
+
+# FieldArea for category lookup
+field_area = { base = "field_area", offsets = [] }
+
+# In-game time: GameDataMan -> [0x0] -> [0xA4]
+igt = { base = "game_data_man", offsets = [0, 0xA4] }
+
+# Player game data: GameDataMan -> [0x0] -> [0x10]
+player_game_data = { base = "game_data_man", offsets = [0, 0x10] }
+
+# Player position: PlayerIns -> [0x0] -> [0x80] -> [0x40] -> [0x28]
+player_position = { base = "player_ins", offsets = [0, 0x80, 0x40, 0x28] }
+
+# =============================================================================
+# CATEGORY DECOMPOSITION CONFIG
+# Required when algorithm = "category_decomposition"
+# =============================================================================
+
+[autosplitter.category_config]
+# Main pattern for event flag manager
+primary_pattern = "sprj_event_flag_man"
+
+# Secondary pattern for FieldArea (used for category lookup)
+secondary_pattern = "field_area"
+
+# Offset from EventFlagMan base to first pointer chain
+# SoulSplitter: _sprjEventFlagMan.Append(0x218, ...)
+base_offset = 0x218
+
+# Size of each entry in the category array (div10m * entry_size)
+# SoulSplitter: div10m * 0x18
+entry_size = 0x18
+
+# Multiplier for category offset in final address calculation
+# SoulSplitter: (category * 0xa8)
+category_multiplier = 0xA8
+
+# FieldArea traversal configuration
+# Offset from FieldArea pattern to base instance
+field_area_base_offset = 0
+
+# Offset to WorldInfoOwner from FieldArea instance
+world_info_offset = 0x10
+
+# Size of each WorldInfo struct in the array
+world_info_struct_size = 0x38
+
+# Size of each WorldBlockInfo struct
+world_block_struct_size = 0x70
+
+# =============================================================================
+# MEMORY LAYOUT (for extended data access)
+# =============================================================================
+
+[autosplitter.memory_layout]
+# In-game time offset from player game data
+igt_offset = 0xA4
+
+# Player position offsets
+position_x_offset = 0x10
+position_y_offset = 0x14
+position_z_offset = 0x18
+
+# =============================================================================
+# VERSION-SPECIFIC OVERRIDES
+# Different game versions may have different offsets
+# =============================================================================
+
+[[autosplitter.versions]]
+version = "1.15"
+patterns = {}
+
+[[autosplitter.versions]]
+version = "1.08"
+# Older version had different IGT offset
+[autosplitter.versions.offsets]
+igt_offset = 0x9C
+
+# =============================================================================
+# BOSSES - flag_id is the event flag ID to check
+# =============================================================================
+
+# Cemetery of Ash / Firelink
+[[bosses]]
+id = "iudex_gundyr"
+name = "Iudex Gundyr"
+flag_id = 13000800
+is_dlc = false
+
+[[bosses]]
+id = "champion_gundyr"
+name = "Champion Gundyr"
+flag_id = 13000830
+is_dlc = false
+
+# High Wall of Lothric
+[[bosses]]
+id = "vordt"
+name = "Vordt of the Boreal Valley"
+flag_id = 13100800
+is_dlc = false
+
+[[bosses]]
+id = "dancer"
+name = "Dancer of the Boreal Valley"
+flag_id = 13100850
+is_dlc = false
+
+# Undead Settlement
+[[bosses]]
+id = "curse_rotted_greatwood"
+name = "Curse-Rotted Greatwood"
+flag_id = 13010800
+is_dlc = false
+
+# Road of Sacrifices
+[[bosses]]
+id = "crystal_sage"
+name = "Crystal Sage"
+flag_id = 13200800
+is_dlc = false
+
+# Cathedral of the Deep
+[[bosses]]
+id = "deacons"
+name = "Deacons of the Deep"
+flag_id = 13300800
+is_dlc = false
+
+# Farron Keep
+[[bosses]]
+id = "abyss_watchers"
+name = "Abyss Watchers"
+flag_id = 13800800
+is_dlc = false
+
+# Catacombs of Carthus
+[[bosses]]
+id = "high_lord_wolnir"
+name = "High Lord Wolnir"
+flag_id = 13900800
+is_dlc = false
+
+# Smouldering Lake
+[[bosses]]
+id = "old_demon_king"
+name = "Old Demon King"
+flag_id = 14000800
+is_dlc = false
+
+# Irithyll of the Boreal Valley
+[[bosses]]
+id = "pontiff_sulyvahn"
+name = "Pontiff Sulyvahn"
+flag_id = 13500800
+is_dlc = false
+
+# Anor Londo
+[[bosses]]
+id = "aldrich"
+name = "Aldrich, Devourer of Gods"
+flag_id = 13700850
+is_dlc = false
+
+# Irithyll Dungeon / Profaned Capital
+[[bosses]]
+id = "yhorm"
+name = "Yhorm the Giant"
+flag_id = 13700800
+is_dlc = false
+
+# Lothric Castle
+[[bosses]]
+id = "dragonslayer_armour"
+name = "Dragonslayer Armour"
+flag_id = 14100800
+is_dlc = false
+
+# Consumed King's Garden
+[[bosses]]
+id = "oceiros"
+name = "Oceiros, the Consumed King"
+flag_id = 14110800
+is_dlc = false
+
+# Grand Archives
+[[bosses]]
+id = "twin_princes"
+name = "Lothric, Younger Prince"
+flag_id = 14500800
+is_dlc = false
+
+# Archdragon Peak
+[[bosses]]
+id = "king_of_the_storm"
+name = "King of the Storm"
+flag_id = 15000850
+is_dlc = false
+
+[[bosses]]
+id = "nameless_king"
+name = "Nameless King"
+flag_id = 15000800
+is_dlc = false
+
+# Kiln of the First Flame
+[[bosses]]
+id = "soul_of_cinder"
+name = "Soul of Cinder"
+flag_id = 15100800
+is_dlc = false
+
+# DLC - Ashes of Ariandel
+[[bosses]]
+id = "champions_gravetender"
+name = "Champion's Gravetender"
+flag_id = 15010850
+is_dlc = true
+
+[[bosses]]
+id = "sister_friede"
+name = "Sister Friede"
+flag_id = 15110800
+is_dlc = true
+
+# DLC - The Ringed City
+[[bosses]]
+id = "demon_prince"
+name = "Demon Prince"
+flag_id = 15100850
+is_dlc = true
+
+[[bosses]]
+id = "halflight"
+name = "Halflight, Spear of the Church"
+flag_id = 15110850
+is_dlc = true
+
+[[bosses]]
+id = "darkeater_midir"
+name = "Darkeater Midir"
+flag_id = 15110851
+is_dlc = true
+
+[[bosses]]
+id = "slave_knight_gael"
+name = "Slave Knight Gael"
+flag_id = 15200800
+is_dlc = true
+
+# =============================================================================
+# PRESETS
+# =============================================================================
+
+[[presets]]
+id = "any-percent"
+name = "Any%"
+description = "Beat the game as fast as possible"
+bosses = [
+    "iudex_gundyr",
+    "vordt",
+    "curse_rotted_greatwood",
+    "crystal_sage",
+    "deacons",
+    "abyss_watchers",
+    "high_lord_wolnir",
+    "pontiff_sulyvahn",
+    "yhorm",
+    "aldrich",
+    "dancer",
+    "dragonslayer_armour",
+    "twin_princes",
+    "soul_of_cinder"
+]
+
+[[presets]]
+id = "all-bosses"
+name = "All Bosses"
+description = "Defeat every boss including optional and DLC"
+bosses = [
+    "iudex_gundyr",
+    "vordt",
+    "curse_rotted_greatwood",
+    "crystal_sage",
+    "deacons",
+    "abyss_watchers",
+    "high_lord_wolnir",
+    "old_demon_king",
+    "pontiff_sulyvahn",
+    "yhorm",
+    "aldrich",
+    "dancer",
+    "oceiros",
+    "champion_gundyr",
+    "dragonslayer_armour",
+    "twin_princes",
+    "king_of_the_storm",
+    "nameless_king",
+    "soul_of_cinder",
+    "champions_gravetender",
+    "sister_friede",
+    "demon_prince",
+    "halflight",
+    "darkeater_midir",
+    "slave_knight_gael"
+]
+
+# =============================================================================
+# ATTRIBUTES (for custom triggers based on character stats)
+# =============================================================================
+
+[[attributes]]
+id = "vigor"
+name = "Vigor"
+offset = 68
+
+[[attributes]]
+id = "attunement"
+name = "Attunement"
+offset = 72
+
+[[attributes]]
+id = "endurance"
+name = "Endurance"
+offset = 76
+
+[[attributes]]
+id = "vitality"
+name = "Vitality"
+offset = 108
+
+[[attributes]]
+id = "strength"
+name = "Strength"
+offset = 80
+
+[[attributes]]
+id = "dexterity"
+name = "Dexterity"
+offset = 84
+
+[[attributes]]
+id = "intelligence"
+name = "Intelligence"
+offset = 88
+
+[[attributes]]
+id = "faith"
+name = "Faith"
+offset = 92
+
+[[attributes]]
+id = "luck"
+name = "Luck"
+offset = 96
+
+[[attributes]]
+id = "soul_level"
+name = "Soul Level"
+offset = 104

@@ -1,0 +1,306 @@
+# Elden Ring - Complete Autosplitter Configuration
+# Uses the "binary_tree" algorithm for flag checking
+
+[game]
+id = "elden_ring"
+name = "Elden Ring"
+short_name = "ER"
+process_names = ["eldenring.exe"]
+
+# =============================================================================
+# AUTOSPLITTER CONFIGURATION
+# =============================================================================
+
+[autosplitter]
+# Elden Ring uses a binary tree structure for event flags
+algorithm = "binary_tree"
+
+# =============================================================================
+# MEMORY PATTERNS
+# =============================================================================
+
+[[autosplitter.patterns]]
+name = "virtual_memory_flag"
+pattern = "44 89 7c 24 28 4c 8b 25 ? ? ? ? 4d 85 e4"
+rip_offset = 8
+instruction_len = 12
+
+[[autosplitter.patterns]]
+name = "fd4_time"
+pattern = "48 8b 05 ? ? ? ? 4c 8b 40 08 4d 85 c0"
+rip_offset = 3
+instruction_len = 7
+
+[[autosplitter.patterns]]
+name = "world_chr_man"
+pattern = "48 8b 0d ? ? ? ? 48 85 c9 74 5e 48 8b 49 08 48 85 c9 74 55"
+rip_offset = 3
+instruction_len = 7
+
+[[autosplitter.patterns]]
+name = "menu_man_imp"
+pattern = "48 8b 0d ? ? ? ? 33 d2 41 b8 02 00 00 00 48 85 c9"
+rip_offset = 3
+instruction_len = 7
+
+[[autosplitter.patterns]]
+name = "game_data_man"
+pattern = "48 8b 0d ? ? ? ? 48 85 c9 74 40 83 b9 70 2e 02 00"
+rip_offset = 3
+instruction_len = 7
+
+# =============================================================================
+# DERIVED POINTERS
+# =============================================================================
+
+[autosplitter.pointers]
+# VirtualMemoryFlag - needs an extra dereference
+event_flags = { base = "virtual_memory_flag", offsets = [0, 0x5] }
+
+# In-game time: FD4Time -> [0x0] -> [0xA0]
+igt = { base = "fd4_time", offsets = [0, 0xA0] }
+
+# Player: WorldChrMan -> [0x0] -> [0x1E508]
+player_ins = { base = "world_chr_man", offsets = [0, 0x1E508] }
+
+# Screen state: MenuManImp -> [0x0] -> [0x730]
+screen_state = { base = "menu_man_imp", offsets = [0, 0x730] }
+
+# =============================================================================
+# BINARY TREE CONFIG
+# Required when algorithm = "binary_tree"
+# =============================================================================
+
+[autosplitter.tree_config]
+# Pattern for VirtualMemoryFlag
+primary_pattern = "virtual_memory_flag"
+
+# Pointer chain to apply after pattern (each offset is dereferenced)
+pointer_chain = [0, 0x5]
+
+# Offset to the divisor value
+divisor_offset = 0x1C
+
+# Offset to tree root pointer
+tree_root_offset = 0x38
+
+# Offset to multiplier for data address calculation
+multiplier_offset = 0x20
+
+# Offset to base address for data calculation
+base_addr_offset = 0x28
+
+# =============================================================================
+# MEMORY LAYOUT - Tree node structure offsets
+# =============================================================================
+
+[autosplitter.memory_layout]
+igt_offset = 0xA0
+screen_state_offset = 0x730
+position_offset = 0x6D4
+map_id_offset = 0x6D0
+player_ins_offset = 0x1E508
+
+# Binary tree node structure
+[autosplitter.memory_layout.event_flag_tree]
+first_sub_element = 0x8
+left_child = 0x0
+right_child = 0x10
+leaf_check_offset = 0x19
+category_offset = 0x20
+mystery_value_offset = 0x28
+element_value_offset = 0x30
+
+# =============================================================================
+# BOSSES - Sample bosses (full list would be much longer)
+# =============================================================================
+
+# Limgrave
+[[bosses]]
+id = "margit"
+name = "Margit, the Fell Omen"
+flag_id = 10000800
+is_dlc = false
+
+[[bosses]]
+id = "godrick"
+name = "Godrick the Grafted"
+flag_id = 10000850
+is_dlc = false
+
+[[bosses]]
+id = "tree_sentinel"
+name = "Tree Sentinel"
+flag_id = 1042380800
+is_dlc = false
+
+[[bosses]]
+id = "flying_dragon_agheel"
+name = "Flying Dragon Agheel"
+flag_id = 1043360800
+is_dlc = false
+
+[[bosses]]
+id = "tibia_mariner_summonwater"
+name = "Tibia Mariner (Summonwater)"
+flag_id = 1044350800
+is_dlc = false
+
+# Weeping Peninsula
+[[bosses]]
+id = "leonine_misbegotten"
+name = "Leonine Misbegotten"
+flag_id = 1043300800
+is_dlc = false
+
+# Liurnia
+[[bosses]]
+id = "red_wolf_of_radagon"
+name = "Red Wolf of Radagon"
+flag_id = 14000800
+is_dlc = false
+
+[[bosses]]
+id = "rennala"
+name = "Rennala, Queen of the Full Moon"
+flag_id = 14000850
+is_dlc = false
+
+[[bosses]]
+id = "royal_knight_loretta"
+name = "Royal Knight Loretta"
+flag_id = 15000850
+is_dlc = false
+
+# Altus Plateau
+[[bosses]]
+id = "godfrey_golden_shade"
+name = "Godfrey, First Elden Lord (Golden Shade)"
+flag_id = 11000800
+is_dlc = false
+
+[[bosses]]
+id = "morgott"
+name = "Morgott, the Omen King"
+flag_id = 11000850
+is_dlc = false
+
+# Mt. Gelmir
+[[bosses]]
+id = "rykard"
+name = "Rykard, Lord of Blasphemy"
+flag_id = 16000800
+is_dlc = false
+
+# Caelid
+[[bosses]]
+id = "starscourge_radahn"
+name = "Starscourge Radahn"
+flag_id = 1052380800
+is_dlc = false
+
+[[bosses]]
+id = "commander_oneil"
+name = "Commander O'Neil"
+flag_id = 1049380800
+is_dlc = false
+
+# Mountaintops of the Giants
+[[bosses]]
+id = "fire_giant"
+name = "Fire Giant"
+flag_id = 1052520800
+is_dlc = false
+
+# Crumbling Farum Azula
+[[bosses]]
+id = "godskin_duo"
+name = "Godskin Duo"
+flag_id = 13000800
+is_dlc = false
+
+[[bosses]]
+id = "maliketh"
+name = "Maliketh, the Black Blade"
+flag_id = 13000850
+is_dlc = false
+
+[[bosses]]
+id = "dragonlord_placidusax"
+name = "Dragonlord Placidusax"
+flag_id = 13000830
+is_dlc = false
+
+# Leyndell, Ashen Capital
+[[bosses]]
+id = "godfrey_hoarah_loux"
+name = "Godfrey, First Elden Lord / Hoarah Loux"
+flag_id = 11050800
+is_dlc = false
+
+[[bosses]]
+id = "radagon_elden_beast"
+name = "Radagon of the Golden Order / Elden Beast"
+flag_id = 19000800
+is_dlc = false
+
+# Mohgwyn Palace
+[[bosses]]
+id = "mohg"
+name = "Mohg, Lord of Blood"
+flag_id = 12050800
+is_dlc = false
+
+# Haligtree
+[[bosses]]
+id = "loretta_knight_of_the_haligtree"
+name = "Loretta, Knight of the Haligtree"
+flag_id = 15010850
+is_dlc = false
+
+[[bosses]]
+id = "malenia"
+name = "Malenia, Blade of Miquella"
+flag_id = 15000800
+is_dlc = false
+
+# =============================================================================
+# PRESETS
+# =============================================================================
+
+[[presets]]
+id = "any-percent"
+name = "Any%"
+description = "Beat the game as fast as possible"
+bosses = [
+    "margit",
+    "godrick",
+    "red_wolf_of_radagon",
+    "rennala",
+    "godfrey_golden_shade",
+    "morgott",
+    "fire_giant",
+    "godskin_duo",
+    "maliketh",
+    "godfrey_hoarah_loux",
+    "radagon_elden_beast"
+]
+
+[[presets]]
+id = "remembrance-run"
+name = "All Remembrances"
+description = "Defeat all Remembrance bosses"
+bosses = [
+    "margit",
+    "godrick",
+    "rennala",
+    "starscourge_radahn",
+    "morgott",
+    "rykard",
+    "fire_giant",
+    "mohg",
+    "malenia",
+    "maliketh",
+    "godfrey_hoarah_loux",
+    "radagon_elden_beast"
+]
