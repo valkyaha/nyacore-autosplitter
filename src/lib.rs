@@ -637,11 +637,44 @@ impl Autosplitter {
             return self.start(game_type, boss_flags);
         }
 
-        // For unknown games on Linux, we can't use the generic engine yet
-        Err(format!(
-            "Unknown game '{}' - generic engine not supported on Linux yet",
-            game_data.game.name
-        ))
+        // For unknown games, use the generic engine with Proton support
+        log::info!(
+            "Starting autosplitter for {} (engine: {}) with {} boss flags [Linux/Proton Generic]",
+            game_data.game.name,
+            game_data.autosplitter.engine,
+            boss_flags.len()
+        );
+
+        self.running.store(true, Ordering::SeqCst);
+
+        {
+            let mut state = self.state.lock().unwrap();
+            state.running = true;
+            state.process_attached = false;
+            state.game_id = game_data.game.id.clone();
+            state.process_id = None;
+            state.bosses_defeated.clear();
+            state.boss_kill_counts.clear();
+        }
+
+        let running = self.running.clone();
+        let state = self.state.clone();
+        let reset_requested = self.reset_requested.clone();
+        let process_names = game_data.game.process_names.clone();
+
+        thread::spawn(move || {
+            log::info!("Autosplitter thread started (generic engine, Linux/Proton)");
+            run_generic_autosplitter_loop_linux(
+                running,
+                state,
+                reset_requested,
+                game_data,
+                process_names,
+                boss_flags,
+            );
+        });
+
+        Ok(())
     }
 }
 
@@ -1192,6 +1225,185 @@ fn run_autosplitter_loop_linux(
                     } else {
                         log::error!("Failed to initialize game for {}", name);
                         thread::sleep(Duration::from_millis(2000));
+                    }
+                } else {
+                    log::warn!("Cannot read process memory for {} (permission denied?)", name);
+                    thread::sleep(Duration::from_millis(2000));
+                }
+            } else {
+                thread::sleep(Duration::from_millis(2000));
+            }
+        }
+
+        thread::sleep(Duration::from_millis(100));
+    }
+
+    // Cleanup
+    let mut s = state.lock().unwrap();
+    s.running = false;
+    s.process_attached = false;
+    s.process_id = None;
+}
+
+// =============================================================================
+// Generic Autosplitter Loop (Linux/Proton) - For data-driven games
+// =============================================================================
+
+#[cfg(target_os = "linux")]
+fn run_generic_autosplitter_loop_linux(
+    running: Arc<AtomicBool>,
+    state: Arc<Mutex<AutosplitterState>>,
+    reset_requested: Arc<AtomicBool>,
+    game_data: GameData,
+    process_names: Vec<String>,
+    boss_flags: Vec<BossFlag>,
+) {
+    use crate::engine::GenericGame;
+
+    let mut game: Option<GenericGame> = None;
+    let mut checked_flags: HashMap<u32, bool> = HashMap::new();
+
+    while running.load(Ordering::SeqCst) {
+        // Check for reset
+        if reset_requested.swap(false, Ordering::SeqCst) {
+            log::info!("Autosplitter: Reset detected");
+            if let Some(ref g) = game {
+                checked_flags.clear();
+                for boss in &boss_flags {
+                    if g.read_event_flag(boss.flag_id) {
+                        checked_flags.insert(boss.flag_id, true);
+                    }
+                }
+            } else {
+                checked_flags.clear();
+            }
+            let mut s = state.lock().unwrap();
+            s.bosses_defeated.clear();
+            s.boss_kill_counts.clear();
+            s.triggers_matched.clear();
+        }
+
+        if let Some(ref g) = game {
+            // Check if process still running
+            if !memory::process::is_process_running_by_pid(g.pid as u32) {
+                log::info!("{} process exited", g.game_data.game.name);
+                game = None;
+                checked_flags.clear();
+
+                let mut s = state.lock().unwrap();
+                s.process_attached = false;
+                s.process_id = None;
+                s.bosses_defeated.clear();
+                s.boss_kill_counts.clear();
+                thread::sleep(Duration::from_millis(1000));
+                continue;
+            }
+
+            // Check boss flags
+            for boss in &boss_flags {
+                let kill_count = g.get_kill_count(boss.flag_id);
+
+                if kill_count > 0 {
+                    let mut s = state.lock().unwrap();
+
+                    let prev_count = s.boss_kill_counts.get(&boss.boss_id).copied().unwrap_or(0);
+                    if kill_count > prev_count {
+                        s.boss_kill_counts.insert(boss.boss_id.clone(), kill_count);
+                        log::info!(
+                            "Boss kill count updated: {} - count: {} -> {}",
+                            boss.boss_name,
+                            prev_count,
+                            kill_count
+                        );
+                    }
+
+                    if !s.bosses_defeated.contains(&boss.boss_id) {
+                        s.bosses_defeated.push(boss.boss_id.clone());
+                        checked_flags.insert(boss.flag_id, true);
+                        log::info!(
+                            "Boss defeated: {} (id={}, flag={})",
+                            boss.boss_name,
+                            boss.boss_id,
+                            boss.flag_id
+                        );
+                    }
+                }
+            }
+        } else {
+            // Try to connect
+            let process_name_refs: Vec<&str> = process_names.iter().map(|s| s.as_str()).collect();
+            if let Some((pid, name)) = memory::process::find_process_by_name(&process_name_refs) {
+                // Verify we can read the process memory
+                if memory::process::open_process(pid).is_some() {
+                    // Get module info
+                    let mut base = 0usize;
+                    let mut size = 0usize;
+                    for attempt in 0..5 {
+                        if let Some((b, s)) = memory::process::get_module_base_and_size(pid) {
+                            base = b;
+                            size = s;
+                            break;
+                        }
+                        if attempt < 4 {
+                            thread::sleep(Duration::from_millis(500));
+                        }
+                    }
+
+                    if base == 0 {
+                        log::warn!("Failed to get module info for {}", name);
+                        thread::sleep(Duration::from_millis(2000));
+                        continue;
+                    }
+
+                    log::info!(
+                        "Found '{}' (PID: {}), base=0x{:X}, size=0x{:X} [Generic Engine]",
+                        name,
+                        pid,
+                        base,
+                        size
+                    );
+
+                    // Initialize generic game
+                    match GenericGame::new(game_data.clone()) {
+                        Ok(mut g) => {
+                            if g.init(pid as i32, base, size) {
+                                log::info!("Connected to {} via generic engine (Linux/Proton)", g.game_data.game.name);
+
+                                // Wait for save data to stabilize
+                                log::info!("Waiting for game save data to stabilize...");
+                                thread::sleep(Duration::from_millis(1500));
+
+                                // Pre-populate checked flags
+                                checked_flags.clear();
+                                let mut pre_populated = Vec::new();
+                                for boss in &boss_flags {
+                                    if g.read_event_flag(boss.flag_id) {
+                                        checked_flags.insert(boss.flag_id, true);
+                                        pre_populated.push(boss.boss_name.clone());
+                                    }
+                                }
+
+                                if !pre_populated.is_empty() {
+                                    log::info!(
+                                        "Pre-populated {} already-defeated bosses",
+                                        pre_populated.len()
+                                    );
+                                }
+
+                                game = Some(g);
+
+                                let mut s = state.lock().unwrap();
+                                s.process_attached = true;
+                                s.process_id = Some(pid);
+                            } else {
+                                log::error!("Failed to initialize generic game - patterns not found");
+                                thread::sleep(Duration::from_millis(2000));
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("Failed to create generic game: {}", e);
+                            thread::sleep(Duration::from_millis(2000));
+                        }
                     }
                 } else {
                     log::warn!("Cannot read process memory for {} (permission denied?)", name);
