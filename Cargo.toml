@@ -1,6 +1,6 @@
 [package]
 name = "nyacore-autosplitter"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Autosplitter module for NYA Core - automatic boss defeat detection for FromSoftware games"
 license = "MIT"
